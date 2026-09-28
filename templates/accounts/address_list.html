@@ -2,9 +2,11 @@
 
 {% block title %}Your Addresses — The ThoughtTronix Store{% endblock %}
 
+
 {% block content %}
   <div class="flex flex-wrap items-center justify-between gap-4">
     <h1 class="text-3xl font-bold">Your Addresses</h1>
+    <html> Thank you for working with us!</html>
     {% if addresses %}
       <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">Add address</a>
     {% endif %}
