@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Delete address — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">Delete this address?</h1>
+      <p class="font-semibold">{{ address }}</p>
+      {% if address.is_default_shipping or address.is_default_billing %}
+        <div class="alert alert-warning" role="alert">
+          <span>
+            This is your default
+            {% if address.is_default_shipping and address.is_default_billing %}shipping and billing
+            {% elif address.is_default_shipping %}shipping{% else %}billing{% endif %}
+            address. You'll have no default until you choose another.
+          </span>
+        </div>
+      {% endif %}
+      <p class="opacity-70">Past orders keep their own copy of the address.</p>
+      <form method="post" class="mt-4 flex justify-end gap-2">
+        {% csrf_token %}
+        <a href="{% url 'accounts:address_list' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-error">Delete address</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

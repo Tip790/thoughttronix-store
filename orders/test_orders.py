@@ -5,7 +5,6 @@ from decimal import Decimal
 from http import HTTPStatus
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,11 +16,6 @@ from .test_checkout_form import VALID_DATA
 @pytest.fixture
 def order(cart, cart_item):
     return place_order(cart, cart.user, dict(VALID_DATA))
-
-
-@pytest.fixture
-def other_customer(db):
-    return get_user_model().objects.create_user(username="other", password="x")
 
 
 # --- Model behavior ----------------------------------------------------------

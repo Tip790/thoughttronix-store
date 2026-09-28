@@ -1,0 +1,31 @@
+{# One checkout address card: saved-address picker, fields, and the save checkbox. #}
+{# Expects: role, title, fields, save_field, selected. #}
+<section class="card bg-base-100 shadow-md">
+  <div class="card-body">
+    <h2 class="card-title">{{ title }}</h2>
+
+    {% if saved_addresses %}
+      <div>
+        <label class="label mb-1" for="id_{{ role }}_saved_address">Use a saved address</label>
+        <select id="id_{{ role }}_saved_address" name="{{ role }}_saved_address" class="select w-full"
+                hx-get="{% url 'orders:checkout_address_fields' role %}"
+                hx-target="#{{ role }}-fields"
+                hx-swap="innerHTML">
+          <option value="">— Enter a new address —</option>
+          {% for address in saved_addresses %}
+            <option value="{{ address.pk }}"{% if address.pk|stringformat:"d" == selected %} selected{% endif %}>{{ address }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    <div id="{{ role }}-fields" class="grid gap-4 sm:grid-cols-2">
+      {% include "orders/partials/_address_fields.html" %}
+    </div>
+
+    <label class="label mt-2 cursor-pointer justify-start gap-3" for="{{ save_field.id_for_label }}">
+      {{ save_field }}
+      <span>{{ save_field.label }}</span>
+    </label>
+  </div>
+</section>

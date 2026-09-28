@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Your Addresses — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">Your Addresses</h1>
+    {% if addresses %}
+      <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">Add address</a>
+    {% endif %}
+  </div>
+
+  {% if addresses %}
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      {% for address in addresses %}
+        <article class="card bg-base-100 shadow-md">
+          <div class="card-body">
+            <h2 class="card-title">{{ address.label|default:address.name }}</h2>
+            {% if address.is_default_shipping or address.is_default_billing %}
+              <div class="flex flex-wrap gap-2">
+                {% if address.is_default_shipping %}<span class="badge badge-primary">Default shipping</span>{% endif %}
+                {% if address.is_default_billing %}<span class="badge badge-secondary">Default billing</span>{% endif %}
+              </div>
+            {% endif %}
+            <address class="not-italic opacity-80">
+              {{ address.name }}<br>
+              {{ address.street }}<br>
+              {% if address.line2 %}{{ address.line2 }}<br>{% endif %}
+              {{ address.city }}, {{ address.state }} {{ address.zip }}
+            </address>
+
+            <div class="card-actions mt-2 flex-wrap items-center justify-between">
+              <div class="flex flex-wrap gap-2">
+                {% if not address.is_default_shipping %}
+                  <form method="post" action="{% url 'accounts:address_make_default' address.pk 'shipping' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-ghost btn-xs">Make default shipping</button>
+                  </form>
+                {% endif %}
+                {% if not address.is_default_billing %}
+                  <form method="post" action="{% url 'accounts:address_make_default' address.pk 'billing' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-ghost btn-xs">Make default billing</button>
+                  </form>
+                {% endif %}
+              </div>
+              <div class="flex gap-2">
+                <a href="{% url 'accounts:address_update' address.pk %}" class="btn btn-outline btn-xs">Edit</a>
+                <a href="{% url 'accounts:address_delete' address.pk %}" class="btn btn-outline btn-error btn-xs">Delete</a>
+              </div>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="py-16 text-center">
+      <p class="text-5xl">🏠</p>
+      <p class="mt-4 text-xl font-semibold">No saved addresses yet</p>
+      <p class="mt-2 opacity-70">Tell us where you live. We'd find out anyway.</p>
+      <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm mt-6">
+        Add an address
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

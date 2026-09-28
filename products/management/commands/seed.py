@@ -8,7 +8,8 @@ Demo logins (documented in the README):
 
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history and a live cart
+    customer / customer123  a plain customer, with order history, a live cart,
+                            and two saved addresses
 """
 
 import random
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -496,6 +498,14 @@ SEED_ADDRESSES = [
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# The customer demo login's address book: (label, street, line2, city,
+# state, ZIP, default for). Fixed values, no RNG — the orders above must
+# not shift.
+CUSTOMER_ADDRESSES = [
+    ("Home", "214 Synapse Street", "", "Canyon", "TX", "79015", Address.ROLES),
+    ("Work", "1 Cognition Plaza", "Suite 400", "Amarillo", "TX", "79101", ()),
+]
+
 
 class Command(BaseCommand):
     help = "Wipe and rebuild the demo world: catalog, tags, and demo accounts."
@@ -508,6 +518,7 @@ class Command(BaseCommand):
         self._create_users()
         self._create_customer_cart()
         self._create_orders()
+        self._create_customer_addresses()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -516,7 +527,8 @@ class Command(BaseCommand):
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
-                f"and a live cart for 'customer'."
+                f"and a live cart and {len(CUSTOMER_ADDRESSES)} saved addresses "
+                f"for 'customer'."
             )
         )
 
@@ -585,6 +597,23 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_addresses(self):
+        customer = get_user_model().objects.get(username="customer")
+        name = f"{customer.first_name} {customer.last_name}"
+        for label, street, line2, city, state, zip_code, defaults in CUSTOMER_ADDRESSES:
+            address = Address.objects.create(
+                user=customer,
+                label=label,
+                name=name,
+                street=street,
+                line2=line2,
+                city=city,
+                state=state,
+                zip=zip_code,
+            )
+            for role in defaults:
+                address.make_default(role)
 
     def _create_orders(self):
         """Order history: 4 visible orders for 'customer', 48 background.

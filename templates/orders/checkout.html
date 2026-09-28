@@ -21,27 +21,12 @@
         </div>
       </section>
 
-      <section class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h2 class="card-title">Shipping address</h2>
-          <div class="grid gap-4 sm:grid-cols-2">
-            {% for field in form.shipping_fields %}
-              {% include "orders/partials/_field.html" %}
-            {% endfor %}
-          </div>
-        </div>
-      </section>
+      {% include "orders/partials/_address_section.html" with role="shipping" title="Shipping address" fields=form.shipping_fields save_field=form.save_shipping_address selected=selected_address.shipping %}
+      {% include "orders/partials/_address_section.html" with role="billing" title="Billing address" fields=form.billing_fields save_field=form.save_billing_address selected=selected_address.billing %}
 
-      <section class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h2 class="card-title">Billing address</h2>
-          <div class="grid gap-4 sm:grid-cols-2">
-            {% for field in form.billing_fields %}
-              {% include "orders/partials/_field.html" %}
-            {% endfor %}
-          </div>
-        </div>
-      </section>
+      <p class="text-sm opacity-70">
+        <a href="{% url 'accounts:address_list' %}" class="link link-hover">Manage saved addresses</a>
+      </p>
 
       <section class="card bg-base-100 shadow-md">
         <div class="card-body">

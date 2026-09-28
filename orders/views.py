@@ -9,12 +9,14 @@ validate the form, hand everything to ``place_order``.
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
+from accounts.models import Address
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -116,16 +118,69 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        """Prefill each address section from the customer's default."""
+        initial = super().get_initial()
+        for role in Address.ROLES:
+            default = Address.objects.default_for(self.request.user, role)
+            if default is not None:
+                initial.update(default.as_checkout_initial(role))
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["cart"] = Cart.for_user(self.request.user)
+        context["saved_addresses"] = Address.objects.filter(user=self.request.user)
+        context["selected_address"] = {
+            role: self._selected_address(role) for role in Address.ROLES
+        }
         return context
+
+    def _selected_address(self, role):
+        """The pk (as a string) the saved-address dropdown should show."""
+        if self.request.method == "POST":
+            return self.request.POST.get(f"{role}_saved_address", "")
+        default = Address.objects.default_for(self.request.user, role)
+        return str(default.pk) if default else ""
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
         order = place_order(cart, self.request.user, form.cleaned_data)
+        # The order stands on its own; saving to the address book is a
+        # convenience that happens after it, outside its transaction.
+        for role in Address.ROLES:
+            if form.cleaned_data[f"save_{role}_address"]:
+                Address.objects.save_from_checkout(
+                    self.request.user, form.cleaned_data, role=role
+                )
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutAddressFieldsView(LoginRequiredMixin, View):
+    """HTMX: re-render one checkout address section from a saved address.
+
+    Picking a saved address fills the section's fields (still editable);
+    picking the blank "new address" choice clears them. Addresses are
+    fetched through the owner — another customer's pk is a 404.
+    """
+
+    def get(self, request, role):
+        if role not in Address.ROLES:
+            raise Http404
+        initial = {}
+        pk = request.GET.get(f"{role}_saved_address", "")
+        if pk:
+            if not pk.isdigit():
+                raise Http404
+            address = get_object_or_404(Address, pk=pk, user=request.user)
+            initial = address.as_checkout_initial(role)
+        form = CheckoutForm(initial=initial)
+        return render(
+            request,
+            "orders/partials/_address_fields.html",
+            {"fields": form.address_fields(role)},
+        )
 
 
 class OwnOrdersMixin(LoginRequiredMixin):
