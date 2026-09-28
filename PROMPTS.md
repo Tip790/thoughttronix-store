@@ -28,6 +28,115 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-09-27 — Discount coupons, grilled then built; then a coupon-failure pop-up
+
+### Prompts
+
+1. `/grill-me` "Add discount coupons via seasonal promotion to be added
+   during checkout when a customer types a code, reducing the total of the
+   order. Codes expire when the promotions end, with a customer receiving
+   a message saying so. Codes will be made and retired by marketing,
+   retiring a code should not change any previous order that used it. The
+   coupon system supports discounts on orders and discounts on specific
+   products, such as a 50% discount on Seraphine for a limited time."
+2. Answers to the grilling questions, in order (one reply each):
+   1. "A" — one `Coupon` model, no separate `Promotion`
+   2. "b" — explicit `scope` (ORDER / PRODUCTS) plus a products M2M
+   3. "a" — percentage discounts only
+   4. "b" — order-level snapshot plus a per-line `discount`
+   5. "a" — soft retire (`is_active`), `Order.coupon` is `PROTECT`
+   6. "A plus uppercase normalization" — codes unique forever
+   7. "A" — calendar dates, both required and inclusive
+   8. "A" — `TIME_ZONE` from `.env`, default `America/Chicago`
+   9. "A" — a specific message for each failure reason
+   10. "Can B be done without HTMX?" — follow-up question; after the
+       answer: "b with the HTMX Apply"
+   11. "A" — a failed code at submit blocks the order
+   12. "B" — once per customer
+   13. "A" — marketing is staff; a Coupons back-office tab
+   14. "b" — a new `coupons` app with one-way dependencies
+   15. "A" — `ROUND_HALF_UP`
+   16. "b" — advertise product promos with a badge
+   17. "b" — badges on the detail page and the catalog cards
+   18. "A" — the same badge for everyone
+   19. "b" — lock a used coupon's terms; dates stay editable
+   20. "b" — usage columns on the coupon list only
+   21. "c" — seed coupons plus past orders that used them
+   22. "C" — the cap depends on scope; then "b" — whole-order cap of 50%
+   23. "C" — skip the PRD and plan, implement now
+3. `/context` — a built-in command run between the two features, not a
+   request to the agent.
+4. "on checkout, if a coupon does not work display it in a more noticible
+   way, a pop-up if possible" — the agent began editing straight away;
+   the user rejected the three in-flight edits and interrupted.
+5. `/grill-me` "on checkout, if a coupon does not work display it in a
+   more noticible way, a pop-up if possible"
+6. Answers, in order: "A" (a modal dialog), "A" (for both Apply and
+   submit), "A" (the red field text is the only inline reminder), "B"
+   ("Try another code" and "Continue without a coupon" buttons), "B" (the
+   on-brand title with the plain reason underneath).
+7. "Implement this feature"
+8. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** a new `coupons` app. `Coupon` supports whole-order and
+  product scopes, percent off, and a date run in store time. It carries
+  the redemption rule (`Coupon.objects.redeemable`), which raises
+  `CouponError` with the customer-facing message, and a single discount
+  calculation (`Coupon.discounts`, rounded half-up). The Coupons
+  back-office tab supports list with usage columns and an active/retired
+  filter, create, edit (terms locked once used), retire/reactivate, and
+  delete-if-unused. `place_order`'s `coupon_code` parameter now re-checks
+  the code and copies the discount onto `Order` (`discount_amount`,
+  `coupon` FK with `PROTECT`, `coupon_code`, `coupon_percent_off`) and
+  onto `OrderItem.discount`. Checkout gained a coupon field, an HTMX Apply
+  preview, and a submit that blocks the order on a bad code. Live product
+  coupons show badges on catalog cards and the detail page, loaded in one
+  prefetch with a query-count test. The dashboard's top products now
+  subtract line discounts. The seed creates 5 coupons plus past orders
+  that used them. `TIME_ZONE` is read from `.env` and defaults to
+  `America/Chicago`. CLAUDE.md was updated. Then the pop-up: a DaisyUI
+  `<dialog>` modal with no custom JavaScript, shown on failed Apply and on
+  failed submit, with "Try another code" / "Continue without a coupon".
+  The summary's yellow alert was removed. Suite went 209 → 284 → 289
+  passed, ruff clean. Nothing committed.
+- **Deviations:** from the recommendation on Q12 (chose once per
+  customer over unlimited), Q16 (chose advertising badges over keeping
+  codes invisible), Q22 (chose a scope-dependent cap over allowing 1–100%
+  everywhere), and the final question (chose to implement now instead of
+  writing `prd/coupons.md` and `plans/coupons.md` first; no PRD or plan
+  exists for this feature). Follow-up question on Q10 about doing Apply
+  without HTMX. Where a reply was terse, the agent assumed the
+  recommendation's add-ons were included: cancelled orders give back the
+  once-per-customer use (Q12), `coupon_percent_off` is copied and "any
+  order locks" (Q19), and the ≥50% warning is kept (Q22b). The
+  implementation departs from the agreed design in three places: order
+  subtotal is a derived property (`total + discount_amount`) rather than
+  a stored field; `products/views.py` imports `coupons` for the badge
+  prefetch, though the models keep the one-way direction; and `coupons`
+  spells out `"CANCELLED"` rather than importing `orders`, pinned by a
+  test.
+- **Sideways:** on the pop-up request, the agent jumped straight into
+  edits without asking about the design, and the user rejected them and
+  re-ran `/grill-me`. The design the grilling produced was close to the
+  rejected one but added the two-button choice and the single inline
+  reminder. Smaller slips, all caught before the end: a pointless
+  `settings` import in `coupons/models.py` (removed at once); one Edit
+  failed on a mismatched docstring and was retried; a test expected
+  419.99 where the math gives 418.99 (the suite caught it); ruff flagged
+  method order (DJ012) and `zip()` without `strict=` (B905), both fixed;
+  a new pop-up test compared against the first `</form>`, which is the
+  navbar's sign-out form, so it proved nothing until it was tightened;
+  and `tailwind build` reported the stylesheet up to date when it lacked
+  the modal styles, so it needed `--force`. Neither feature was checked in
+  a browser. Tests confirm the rendered HTML only.
+
 ## 2026-09-20 — Product.is_featured, from model field to Featured badge
 
 ### Prompts
