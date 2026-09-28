@@ -1,10 +1,62 @@
+from dataclasses import dataclass
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from coupons.models import Coupon
 from products.models import Product
+
+ZERO = Decimal("0.00")
+
+
+@dataclass(frozen=True)
+class QuoteLine:
+    item: "CartItem"
+    discount: Decimal
+
+    @property
+    def net_total(self):
+        return self.item.line_total - self.discount
+
+
+@dataclass(frozen=True)
+class Quote:
+    """What the cart costs, with or without a coupon — the checkout summary.
+
+    Priced by ``Coupon.discounts``, the same math ``place_order`` stores,
+    so the total a customer sees is the total they pay.
+    """
+
+    lines: list[QuoteLine]
+    subtotal: Decimal
+    discount: Decimal
+    coupon: Coupon | None = None
+
+    @property
+    def total(self):
+        return self.subtotal - self.discount
+
+    @classmethod
+    def for_lines(cls, items, coupon=None):
+        items = list(items)
+        subtotal = sum((item.line_total for item in items), ZERO)
+        if coupon is None:
+            line_discounts, discount = [ZERO] * len(items), ZERO
+        else:
+            line_discounts, discount = coupon.discounts(
+                (item.product, item.line_total) for item in items
+            )
+        return cls(
+            lines=[
+                QuoteLine(item, d)
+                for item, d in zip(items, line_discounts, strict=True)
+            ],
+            subtotal=subtotal,
+            discount=discount,
+            coupon=coupon,
+        )
 
 
 class Cart(models.Model):
@@ -38,7 +90,11 @@ class Cart(models.Model):
         return self.items.select_related("product")
 
     def total(self):
-        return sum((item.line_total for item in self.lines()), Decimal("0.00"))
+        return sum((item.line_total for item in self.lines()), ZERO)
+
+    def quote(self, coupon=None):
+        """Price the cart, optionally with an already-validated coupon."""
+        return Quote.for_lines(self.lines(), coupon)
 
     def item_count(self):
         """Total units across all lines — the navbar badge number."""
@@ -83,7 +139,9 @@ class Order(models.Model):
 
     Addresses are flat denormalized fields: the order must not change if
     the customer later edits anything. Of the card, only the last four
-    digits survive checkout.
+    digits survive checkout. A coupon's effect is copied too — code,
+    percent, and amount — so retiring or editing the coupon changes
+    nothing here; the ``coupon`` FK is ``PROTECT`` so it can't vanish.
     """
 
     class Status(models.TextChoices):
@@ -100,7 +158,18 @@ class Order(models.Model):
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.PLACED
     )
+    # What was charged, after any discount. ``subtotal`` is derived.
     total = models.DecimalField(max_digits=10, decimal_places=2)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=ZERO)
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="orders",
+    )
+    coupon_code = models.CharField(max_length=30, blank=True)
+    coupon_percent_off = models.PositiveSmallIntegerField(null=True, blank=True)
     email = models.EmailField()
 
     shipping_name = models.CharField(max_length=100)
@@ -133,13 +202,19 @@ class Order(models.Model):
         """The customer-facing order number, e.g. ``TT-2026-00042``."""
         return f"TT-{self.created_at.year}-{self.pk:05d}"
 
+    @property
+    def subtotal(self):
+        """The price before the coupon: what was charged plus what was taken off."""
+        return self.total + self.discount_amount
+
 
 class OrderItem(models.Model):
     """One line of an order, priced as of purchase time.
 
     Name and unit price are denormalized: order history must not change
     when the catalog does. The product FK survives for linking while the
-    product exists.
+    product exists. ``discount`` is this line's share of a product
+    coupon; whole-order coupons leave it at zero.
     """
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
@@ -147,6 +222,7 @@ class OrderItem(models.Model):
     product_name = models.CharField(max_length=200)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=ZERO)
 
     class Meta:
         ordering = ["pk"]
@@ -157,3 +233,7 @@ class OrderItem(models.Model):
     @property
     def line_total(self):
         return self.unit_price * self.quantity
+
+    @property
+    def net_total(self):
+        return self.line_total - self.discount

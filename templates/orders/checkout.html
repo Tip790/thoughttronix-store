@@ -40,33 +40,33 @@
         </div>
       </section>
 
+      <section class="card bg-base-100 shadow-md">
+        <div class="card-body">
+          <h2 class="card-title">Coupon</h2>
+          <label class="label mb-1" for="{{ form.coupon_code.id_for_label }}">{{ form.coupon_code.label }}</label>
+          <div class="join w-full">
+            {{ form.coupon_code }}
+            <button type="button" class="btn btn-secondary join-item"
+                    hx-post="{% url 'orders:checkout_coupon' %}"
+                    hx-include="#{{ form.coupon_code.id_for_label }}"
+                    hx-target="#order-summary"
+                    hx-swap="outerHTML">
+              Apply
+            </button>
+          </div>
+          {% for error in form.coupon_code.errors %}
+            <p class="mt-1 text-sm text-error">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </section>
+
       <button type="submit" class="btn btn-primary w-full">
-        Place order — ${{ cart.total|intcomma }}
+        Place order — <span id="place-order-total">${{ quote.total|intcomma }}</span>
       </button>
     </form>
 
     <aside>
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h2 class="card-title">Your order</h2>
-          <ul class="space-y-2">
-            {% for item in cart.lines %}
-              <li class="flex justify-between gap-4 text-sm">
-                <span>{{ item.quantity }} × {{ item.product.name }}</span>
-                <span class="whitespace-nowrap">${{ item.line_total|intcomma }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-          <div class="divider my-2"></div>
-          <p class="flex justify-between font-semibold">
-            <span>Total</span>
-            <span class="text-primary">${{ cart.total|intcomma }}</span>
-          </p>
-          <a href="{% url 'orders:cart' %}" class="link link-hover text-sm opacity-70">
-            Edit cart
-          </a>
-        </div>
-      </div>
+      {% include "orders/partials/_order_summary.html" %}
     </aside>
   </div>
 {% endblock %}

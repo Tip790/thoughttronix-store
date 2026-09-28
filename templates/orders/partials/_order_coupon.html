@@ -1,0 +1,8 @@
+{% load humanize %}
+{# A placed order's coupon lines, read from the order's own snapshot — never the live coupon. #}
+{% if order.discount_amount %}
+  <p class="text-sm opacity-70">Subtotal ${{ order.subtotal|intcomma }}</p>
+  <p class="text-sm text-success">
+    {{ order.coupon_code }} ({{ order.coupon_percent_off }}% off) −${{ order.discount_amount|intcomma }}
+  </p>
+{% endif %}

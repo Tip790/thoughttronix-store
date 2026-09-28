@@ -188,6 +188,19 @@ def test_top_products_merge_lines_across_orders(customer):
     assert top[0]["revenue"] == Decimal("267.00")
 
 
+def test_top_products_subtract_product_coupon_discounts(customer):
+    order = make_order(customer, "0.00")
+    line = add_item(order, "Seraphine", "349.00", quantity=2)  # 698.00
+    line.discount = Decimal("349.00")  # 50% off with a product coupon
+    line.save()
+    add_item(order, "Hush", "400.00")
+
+    top = queries.top_products()
+
+    assert [entry["product_name"] for entry in top] == ["Hush", "Seraphine"]
+    assert top[1]["revenue"] == Decimal("349.00")
+
+
 def test_top_products_respect_limit_cancellation_and_period(customer):
     cancelled = make_order(customer, "0.00", status=Order.Status.CANCELLED)
     add_item(cancelled, "SoulSear Mark II", "2400000.00")

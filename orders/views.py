@@ -17,6 +17,7 @@ from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
 from accounts.models import Address
+from coupons.models import Coupon, CouponError
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -118,6 +119,11 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["cart"] = Cart.for_user(self.request.user)
+        return kwargs
+
     def get_initial(self):
         """Prefill each address section from the customer's default."""
         initial = super().get_initial()
@@ -130,6 +136,8 @@ class CheckoutView(LoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["cart"] = Cart.for_user(self.request.user)
+        # A re-rendered form keeps a coupon that still checks out.
+        context["quote"] = context["cart"].quote(context["form"].coupon)
         context["saved_addresses"] = Address.objects.filter(user=self.request.user)
         context["selected_address"] = {
             role: self._selected_address(role) for role in Address.ROLES
@@ -145,7 +153,19 @@ class CheckoutView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(cart, self.request.user, form.cleaned_data)
+        try:
+            order = place_order(
+                cart,
+                self.request.user,
+                form.cleaned_data,
+                coupon_code=form.cleaned_data["coupon_code"],
+            )
+        except CouponError as error:
+            # The code went bad after the form checked it (midnight, or a
+            # retirement): no order — the customer pays what they saw or nothing.
+            form.coupon = None
+            form.add_error("coupon_code", str(error))
+            return self.form_invalid(form)
         # The order stands on its own; saving to the address book is a
         # convenience that happens after it, outside its transaction.
         for role in Address.ROLES:
@@ -155,6 +175,32 @@ class CheckoutView(LoginRequiredMixin, FormView):
                 )
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutCouponView(LoginRequiredMixin, View):
+    """HTMX: preview a coupon — re-render the order summary with it applied.
+
+    Nothing is stored; the code rides along in the checkout form and is
+    checked again when the order is placed. A blank code clears the
+    discount. The Place-order button's total updates out of band.
+    """
+
+    def post(self, request):
+        cart = Cart.for_user(request.user)
+        code = Coupon.normalize(request.POST.get("coupon_code", ""))
+        coupon, error = None, ""
+        if code:
+            try:
+                coupon = Coupon.objects.redeemable(
+                    code, user=request.user, lines=list(cart.lines())
+                )
+            except CouponError as exc:
+                error = str(exc)
+        return render(
+            request,
+            "orders/partials/_order_summary.html",
+            {"quote": cart.quote(coupon), "coupon_error": error, "oob_total": True},
+        )
 
 
 class CheckoutAddressFieldsView(LoginRequiredMixin, View):

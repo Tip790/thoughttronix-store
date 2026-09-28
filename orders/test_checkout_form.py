@@ -67,7 +67,17 @@ def test_each_rule_rejects_bad_input_on_its_own_field(field, value):
     assert len(form.errors) == 1  # the error lands beside its field, alone
 
 
-def test_the_form_declares_no_imperative_validation():
-    """The showcase contract: declarative rules only, per the PRD."""
+def test_the_coupon_is_the_forms_only_imperative_rule():
+    """The showcase contract: declarative rules, plus the one coupon check
+    that needs the cart and today's date."""
     assert "clean" not in CheckoutForm.__dict__
-    assert not any(name.startswith("clean_") for name in CheckoutForm.__dict__)
+    assert [name for name in CheckoutForm.__dict__ if name.startswith("clean_")] == [
+        "clean_coupon_code"
+    ]
+
+
+def test_the_coupon_code_is_optional():
+    form = form_with(coupon_code="")
+
+    assert form.is_valid()
+    assert form.cleaned_data["coupon_code"] == ""

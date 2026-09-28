@@ -3,14 +3,17 @@
 Every rule is visible at its field declaration, in the style of data
 annotations: field types validate (``EmailField``), field arguments
 validate (``required``, ``max_length``, ``ChoiceField``), and the
-``validators=[...]`` list carries the rest. No ``clean_*`` methods
-and no ``clean()`` — none of its current rules need imperative validation.
+``validators=[...]`` list carries the rest. One exception, and only
+one: ``clean_coupon_code``, because whether a code is redeemable depends
+on the cart and today's date, which no field declaration can see. No
+``clean()``.
 """
 
 from django import forms
 from django.core.validators import RegexValidator
 
 from accounts.models import US_STATES, zip_validator
+from coupons.models import Coupon, CouponError
 
 from .models import Order
 from .validators import validate_card_number, validate_expiry
@@ -57,6 +60,8 @@ class CheckoutForm(forms.Form):
     )
     card_cvv = forms.CharField(label="CVV", max_length=4, validators=[cvv_validator])
 
+    coupon_code = forms.CharField(label="Coupon code", max_length=30, required=False)
+
     # Opt-in: after the order is placed, copy the section into the
     # customer's address book. Never read by ``place_order``.
     save_shipping_address = forms.BooleanField(
@@ -66,8 +71,12 @@ class CheckoutForm(forms.Form):
         label="Save this address to my account", required=False
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cart=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # The cart a coupon is checked against; the redeemed coupon lands
+        # on ``self.coupon`` for the view's order summary.
+        self.cart = cart
+        self.coupon = None
         for field in self.fields.values():
             widget = field.widget
             if isinstance(widget, forms.CheckboxInput):
@@ -76,6 +85,22 @@ class CheckoutForm(forms.Form):
                 widget.attrs["class"] = "select w-full"
             else:
                 widget.attrs["class"] = "input w-full"
+        # Joined to its Apply button on the page.
+        self.fields["coupon_code"].widget.attrs["class"] = "input join-item w-full"
+
+    def clean_coupon_code(self):
+        code = Coupon.normalize(self.cleaned_data["coupon_code"])
+        if not code:
+            return ""
+        if self.cart is None:
+            raise ValueError("CheckoutForm needs the cart to check a coupon code.")
+        try:
+            self.coupon = Coupon.objects.redeemable(
+                code, user=self.cart.user, lines=list(self.cart.lines())
+            )
+        except CouponError as error:
+            raise forms.ValidationError(str(error)) from None
+        return code
 
     # Field groups for the template — the form owns its own structure.
 

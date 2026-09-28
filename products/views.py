@@ -1,5 +1,5 @@
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -12,9 +12,23 @@ from django.views.generic import (
 )
 
 from accounts.mixins import StaffRequiredMixin
+from coupons.models import Coupon
 
 from .forms import CategoryForm, ProductForm, TagForm
 from .models import Category, Product, Tag
+
+
+def live_coupons():
+    """Prefetch each product's live product coupons onto ``live_coupons``.
+
+    One query for the whole page, however many cards — the promo badge
+    never costs a query per product. Built per request: "live" is today.
+    """
+    return Prefetch(
+        "coupons",
+        queryset=Coupon.objects.live().filter(scope=Coupon.Scope.PRODUCTS),
+        to_attr="live_coupons",
+    )
 
 
 class CatalogView(ListView):
@@ -29,7 +43,9 @@ class CatalogView(ListView):
     paginate_by = 12
 
     def get_queryset(self):
-        products = Product.objects.select_related("category").prefetch_related("tags")
+        products = Product.objects.select_related("category").prefetch_related(
+            "tags", live_coupons()
+        )
         query = self.request.GET.get("q", "").strip()
         if query:
             products = products.search(query)
@@ -68,7 +84,11 @@ class ProductDetailView(DetailView):
 
     template_name = "products/detail.html"
     context_object_name = "product"
-    queryset = Product.objects.select_related("category").prefetch_related("tags")
+
+    def get_queryset(self):
+        return Product.objects.select_related("category").prefetch_related(
+            "tags", live_coupons()
+        )
 
 
 # --- The back office --------------------------------------------------------

@@ -86,8 +86,10 @@ def top_products(since: datetime | None = None, *, limit: int = 5) -> list[dict]
 
     Grouped by the order lines' denormalized ``product_name``, so the
     ranking reflects what was actually charged — later catalog edits and
-    deletions don't rewrite history. Each entry is ``{"product_name",
-    "revenue", "units"}``.
+    deletions don't rewrite history. Product-coupon discounts are
+    subtracted per line; whole-order coupon discounts live only on the
+    order, so this ranking doesn't reflect them (``total_revenue`` does).
+    Each entry is ``{"product_name", "revenue", "units"}``.
     """
     items = OrderItem.objects.exclude(order__status=Order.Status.CANCELLED)
     if since is not None:
@@ -96,7 +98,7 @@ def top_products(since: datetime | None = None, *, limit: int = 5) -> list[dict]
         items.values("product_name")
         .annotate(
             revenue=Sum(
-                F("unit_price") * F("quantity"),
+                F("unit_price") * F("quantity") - F("discount"),
                 output_field=DecimalField(max_digits=12, decimal_places=2),
             ),
             units=Sum("quantity"),

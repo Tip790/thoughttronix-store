@@ -24,6 +24,11 @@ urlpatterns = [
     ),
     path("checkout/", views.CheckoutView.as_view(), name="checkout"),
     path(
+        "checkout/coupon/",
+        views.CheckoutCouponView.as_view(),
+        name="checkout_coupon",
+    ),
+    path(
         "checkout/address-fields/<str:role>/",
         views.CheckoutAddressFieldsView.as_view(),
         name="checkout_address_fields",

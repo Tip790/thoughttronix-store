@@ -1,0 +1,97 @@
+{% extends "backoffice/base.html" %}
+{% load humanize %}
+
+{% block title %}Coupons — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="join">
+      <a href="{% url 'coupons:manage_coupons' %}"
+         class="btn join-item btn-sm {% if not active_status %}btn-primary{% endif %}">All</a>
+      <a href="?status=active"
+         class="btn join-item btn-sm {% if active_status == 'active' %}btn-primary{% endif %}">Active</a>
+      <a href="?status=retired"
+         class="btn join-item btn-sm {% if active_status == 'retired' %}btn-primary{% endif %}">Retired</a>
+    </div>
+    <a href="{% url 'coupons:manage_coupon_create' %}" class="btn btn-primary btn-sm">
+      + Add coupon
+    </a>
+  </div>
+
+  {% if coupons %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Discount</th>
+            <th>Runs</th>
+            <th>Status</th>
+            <th class="text-right">Uses</th>
+            <th class="text-right">Discount given</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for coupon in coupons %}
+            <tr>
+              <td>
+                <a href="{% url 'coupons:manage_coupon_update' coupon.pk %}"
+                   class="link-hover font-mono font-semibold">{{ coupon.code }}</a>
+              </td>
+              <td>
+                {{ coupon.percent_off }}% off
+                {% if coupon.scope == "ORDER" %}
+                  <span class="opacity-60">the whole order</span>
+                {% else %}
+                  <p class="text-xs opacity-60">{{ coupon.products.all|join:", " }}</p>
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap text-sm">
+                {{ coupon.starts_on|date:"M j, Y" }} – {{ coupon.ends_on|date:"M j, Y" }}
+              </td>
+              <td>
+                {% with status=coupon.status %}
+                  <span class="badge badge-outline {% if status == 'Live' %}badge-success{% elif status == 'Scheduled' %}badge-info{% elif status == 'Expired' %}badge-warning{% endif %}">{{ status }}</span>
+                {% endwith %}
+              </td>
+              <td class="text-right">{{ coupon.uses }}</td>
+              <td class="text-right">${{ coupon.discount_given|intcomma }}</td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'coupons:manage_coupon_update' coupon.pk %}"
+                   class="btn btn-ghost btn-xs">Edit</a>
+                <form method="post" action="{% url 'coupons:manage_coupon_toggle' coupon.pk %}" class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs">
+                    {% if coupon.is_active %}Retire{% else %}Reactivate{% endif %}
+                  </button>
+                </form>
+                {% if not coupon.order_count %}
+                  <a href="{% url 'coupons:manage_coupon_delete' coupon.pk %}"
+                     class="btn btn-ghost btn-xs text-error">Delete</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="py-16 text-center">
+      <p class="text-5xl">🎟️</p>
+      {% if active_status == "retired" %}
+        <p class="mt-4 text-xl font-semibold">Nothing retired yet</p>
+        <p class="mt-2 opacity-70">Every promotion is still in play.</p>
+      {% elif active_status == "active" %}
+        <p class="mt-4 text-xl font-semibold">No active coupons</p>
+        <p class="mt-2 opacity-70">Customers are paying full price. Leadership approves.</p>
+      {% else %}
+        <p class="mt-4 text-xl font-semibold">No coupons yet</p>
+        <p class="mt-2 opacity-70">Generosity is a thought we haven't had.</p>
+      {% endif %}
+      <a href="{% url 'coupons:manage_coupon_create' %}" class="btn btn-primary btn-sm mt-6">
+        Create a coupon
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

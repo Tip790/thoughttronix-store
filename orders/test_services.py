@@ -8,6 +8,7 @@ from decimal import Decimal
 
 import pytest
 
+from coupons.models import CouponError
 from products.models import Product
 
 from .models import CartItem, Order, OrderItem
@@ -124,7 +125,77 @@ def test_a_failure_midway_leaves_no_partial_order(
     assert CartItem.objects.count() == 2
 
 
-def test_the_coupon_seam_is_accepted_and_ignored(cart, cart_item, checkout_data):
-    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+# --- Coupons -----------------------------------------------------------------
+
+
+def test_no_coupon_means_no_discount(cart, cart_item, checkout_data):
+    order = place_order(cart, cart.user, checkout_data, coupon_code="")
 
     assert order.total == Decimal("699.98")
+    assert order.discount_amount == Decimal("0.00")
+    assert order.coupon is None
+    assert order.coupon_code == ""
+
+
+def test_an_order_coupon_discounts_the_order(
+    cart, cart_item, order_coupon, checkout_data
+):
+    order = place_order(cart, cart.user, checkout_data, coupon_code="thoughts10 ")
+
+    # 10% of 699.98 is 69.998 — rounded half-up to 70.00.
+    assert order.discount_amount == Decimal("70.00")
+    assert order.total == Decimal("629.98")
+    assert order.subtotal == Decimal("699.98")
+    assert order.coupon == order_coupon
+    assert order.coupon_code == "THOUGHTS10"
+    assert order.coupon_percent_off == 10
+    assert order.items.get().discount == Decimal("0.00")
+
+
+def test_a_product_coupon_discounts_only_its_lines(
+    cart, cart_item, product_coupon, category, checkout_data
+):
+    cart.add(
+        Product.objects.create(
+            name="Charging Pillow",
+            slug="charging-pillow",
+            price=Decimal("69.00"),
+            category=category,
+        )
+    )
+
+    order = place_order(cart, cart.user, checkout_data, coupon_code="SERAPHINE50")
+
+    seraphine, pillow = order.items.all()
+    assert seraphine.discount == Decimal("349.99")  # 50% of 2 × 349.99
+    assert pillow.discount == Decimal("0.00")
+    assert order.discount_amount == Decimal("349.99")
+    assert order.total == Decimal("418.99")  # 768.98 − 349.99
+
+
+def test_retiring_or_editing_a_coupon_leaves_past_orders_alone(
+    cart, cart_item, order_coupon, checkout_data
+):
+    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+
+    order_coupon.is_active = False
+    order_coupon.percent_off = 40
+    order_coupon.save()
+
+    order.refresh_from_db()
+    assert order.coupon_percent_off == 10
+    assert order.discount_amount == Decimal("70.00")
+    assert order.total == Decimal("629.98")
+
+
+def test_an_unredeemable_coupon_blocks_the_whole_order(
+    cart, cart_item, order_coupon, checkout_data
+):
+    order_coupon.is_active = False
+    order_coupon.save()
+
+    with pytest.raises(CouponError, match="no longer available"):
+        place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+
+    assert not Order.objects.exists()
+    assert cart.items.count() == 1  # the cart is untouched
