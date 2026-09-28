@@ -55,6 +55,66 @@ def test_apply_with_a_blank_code_clears_the_discount(client, customer, cart_item
     assert "alert" not in page
 
 
+MODAL_TITLE = "We had other thoughts about that code"
+
+
+def test_a_failed_apply_opens_the_pop_up_and_marks_the_field(
+    client, customer, cart_item
+):
+    client.force_login(customer)
+
+    response = client.post(APPLY_URL, {"coupon_code": "nope"})
+
+    page = response.content.decode()
+    assert '<div id="coupon-modal" hx-swap-oob="true">' in page
+    assert "<dialog" in page and MODAL_TITLE in page
+    assert "Continue without a coupon" in page
+    # The field swaps too: the reminder beside it, the code kept to fix.
+    assert '<div id="coupon-field" hx-swap-oob="true">' in page
+    assert (
+        '<p class="mt-1 text-sm text-error">NOPE isn&#x27;t a valid code.</p>' in page
+    )
+    assert 'value="NOPE"' in page
+    # The old yellow alert in the summary is gone.
+    assert "alert-warning" not in page
+
+
+def test_a_good_apply_clears_any_open_pop_up(client, customer, cart_item, order_coupon):
+    client.force_login(customer)
+
+    response = client.post(APPLY_URL, {"coupon_code": "THOUGHTS10"})
+
+    page = response.content.decode()
+    assert '<div id="coupon-modal" hx-swap-oob="true">' in page  # swapped in, empty
+    assert "<dialog" not in page
+    assert "text-error" not in page
+
+
+def test_continue_without_a_coupon_empties_the_field_at_full_price(
+    client, customer, cart_item
+):
+    """The pop-up's button posts a blank code to Apply."""
+    client.force_login(customer)
+
+    response = client.post(APPLY_URL, {"coupon_code": ""})
+
+    page = response.content.decode()
+    assert "<dialog" not in page
+    assert 'name="coupon_code"' in page
+    assert 'name="coupon_code" value=' not in page  # the input is empty
+    assert "Place order" not in page  # the order isn't placed for them
+    assert "$699.98" in page
+
+
+def test_the_pop_up_continue_button_posts_a_blank_code(client, customer, cart_item):
+    client.force_login(customer)
+
+    page = client.post(APPLY_URL, {"coupon_code": "nope"}).content.decode()
+
+    assert f'hx-post="{APPLY_URL}"' in page
+    assert """hx-vals='{"coupon_code": ""}'""" in page
+
+
 def test_apply_requires_login(client, db):
     response = client.post(APPLY_URL, {"coupon_code": "THOUGHTS10"})
 
@@ -69,6 +129,25 @@ def test_checkout_page_has_the_apply_button(client, customer, cart_item):
 
     assert f'hx-post="{APPLY_URL}"' in page
     assert 'id="order-summary"' in page
+    assert '<div id="coupon-modal">' in page  # the empty container, ready to swap
+    assert "<dialog" not in page
+
+
+def test_a_failed_submit_renders_the_pop_up_open_outside_the_form(
+    client, customer, cart_item
+):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("orders:checkout"), {**VALID_DATA, "coupon_code": "nope"}
+    )
+
+    page = response.content.decode()
+    assert "<dialog" in page and MODAL_TITLE in page
+    assert "NOPE isn&#x27;t a valid code." in page
+    # Forms can't nest: the pop-up's method="dialog" forms follow the checkout form.
+    # (The checkout form closes before the summary's </aside>.)
+    assert page.index('<div id="coupon-modal">') > page.index("</aside>")
 
 
 # --- Submit ------------------------------------------------------------------

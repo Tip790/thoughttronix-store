@@ -182,7 +182,9 @@ class CheckoutCouponView(LoginRequiredMixin, View):
 
     Nothing is stored; the code rides along in the checkout form and is
     checked again when the order is placed. A blank code clears the
-    discount. The Place-order button's total updates out of band.
+    discount — that's also the pop-up's "Continue without a coupon".
+    Out of band: the Place-order total, the coupon field (its error, or
+    emptied), and the failure pop-up (opened, or cleared away).
     """
 
     def post(self, request):
@@ -199,7 +201,14 @@ class CheckoutCouponView(LoginRequiredMixin, View):
         return render(
             request,
             "orders/partials/_order_summary.html",
-            {"quote": cart.quote(coupon), "coupon_error": error, "oob_total": True},
+            {
+                "quote": cart.quote(coupon),
+                "coupon_error": error,
+                "coupon_field": CheckoutForm(initial={"coupon_code": code})[
+                    "coupon_code"
+                ],
+                "oob": True,
+            },
         )
 
 

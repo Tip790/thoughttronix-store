@@ -1,0 +1,20 @@
+{# The checkout coupon field: input, Apply button, and its one inline reminder. #}
+{# Apply responses swap it out of band — to show or clear the error, or to empty #}
+{# the input after "Continue without a coupon". #}
+{# Expects: field (the coupon_code BoundField); error (blank for none); oob. #}
+<div id="coupon-field"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+  <div class="join w-full">
+    {{ field }}
+    <button type="button" class="btn btn-secondary join-item"
+            hx-post="{% url 'orders:checkout_coupon' %}"
+            hx-include="#{{ field.id_for_label }}"
+            hx-target="#order-summary"
+            hx-swap="outerHTML">
+      Apply
+    </button>
+  </div>
+  {% if error %}
+    <p class="mt-1 text-sm text-error">{{ error }}</p>
+  {% endif %}
+</div>

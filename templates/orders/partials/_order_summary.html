@@ -1,6 +1,7 @@
 {% load humanize %}
 {# The checkout order summary; the coupon Apply button swaps this card. #}
-{# Expects: quote; optional coupon_error; oob_total also refreshes the Place-order total. #}
+{# Expects: quote. From Apply (oob): coupon_field and coupon_error too — the #}
+{# Place-order total, the coupon field, and the pop-up all update out of band. #}
 <div id="order-summary" class="card bg-base-100 shadow-md">
   <div class="card-body">
     <h2 class="card-title">Your order</h2>
@@ -35,14 +36,13 @@
       <span>Total</span>
       <span class="text-primary">${{ quote.total|intcomma }}</span>
     </p>
-    {% if coupon_error %}
-      <div class="alert alert-warning mt-2 text-sm" role="alert"><span>{{ coupon_error }}</span></div>
-    {% endif %}
     <a href="{% url 'orders:cart' %}" class="link link-hover text-sm opacity-70">
       Edit cart
     </a>
   </div>
 </div>
-{% if oob_total %}
+{% if oob %}
   <span id="place-order-total" hx-swap-oob="true">${{ quote.total|intcomma }}</span>
+  {% include "orders/partials/_coupon_field.html" with field=coupon_field error=coupon_error oob=True %}
+  {% include "orders/partials/_coupon_modal.html" with message=coupon_error oob=True %}
 {% endif %}

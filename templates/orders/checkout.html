@@ -43,20 +43,7 @@
       <section class="card bg-base-100 shadow-md">
         <div class="card-body">
           <h2 class="card-title">Coupon</h2>
-          <label class="label mb-1" for="{{ form.coupon_code.id_for_label }}">{{ form.coupon_code.label }}</label>
-          <div class="join w-full">
-            {{ form.coupon_code }}
-            <button type="button" class="btn btn-secondary join-item"
-                    hx-post="{% url 'orders:checkout_coupon' %}"
-                    hx-include="#{{ form.coupon_code.id_for_label }}"
-                    hx-target="#order-summary"
-                    hx-swap="outerHTML">
-              Apply
-            </button>
-          </div>
-          {% for error in form.coupon_code.errors %}
-            <p class="mt-1 text-sm text-error">{{ error }}</p>
-          {% endfor %}
+          {% include "orders/partials/_coupon_field.html" with field=form.coupon_code error=form.coupon_code.errors.0 %}
         </div>
       </section>
 
@@ -69,4 +56,7 @@
       {% include "orders/partials/_order_summary.html" %}
     </aside>
   </div>
+
+  {# Outside the checkout form: the pop-up's method="dialog" forms can't nest in it. #}
+  {% include "orders/partials/_coupon_modal.html" with message=form.coupon_code.errors.0 %}
 {% endblock %}

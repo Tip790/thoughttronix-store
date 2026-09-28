@@ -1,0 +1,32 @@
+{# The coupon-failure pop-up: a native <dialog> rendered open, no JavaScript. #}
+{# "Try another code" closes it via method="dialog" — the browser does that. #}
+{# "Continue without a coupon" posts a blank code to Apply; the response empties #}
+{# this container out of band, which is what makes the dialog disappear. #}
+{# Must sit outside the checkout <form>: forms can't nest. #}
+{# Expects: message (blank renders just the empty container); oob. #}
+<div id="coupon-modal"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if message %}
+    <dialog class="modal" open role="alertdialog"
+            aria-labelledby="coupon-modal-title" aria-describedby="coupon-modal-reason">
+      <div class="modal-box border border-warning">
+        <h3 id="coupon-modal-title" class="text-lg font-bold">We had other thoughts about that code 🧠</h3>
+        <p id="coupon-modal-reason" class="py-4">{{ message }}</p>
+        <div class="modal-action flex-wrap">
+          <form method="dialog">
+            <button type="submit" class="btn btn-ghost">Try another code</button>
+          </form>
+          <button type="button" class="btn btn-primary" autofocus
+                  hx-post="{% url 'orders:checkout_coupon' %}"
+                  hx-vals='{"coupon_code": ""}'
+                  hx-target="#order-summary"
+                  hx-swap="outerHTML">
+            Continue without a coupon
+          </button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+      </form>
+    </dialog>
+  {% endif %}
+</div>
