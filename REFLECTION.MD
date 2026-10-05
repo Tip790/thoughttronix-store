@@ -1,3 +1,26 @@
+## Product Images
+
+##Question 1 - One decision from grill me. Choose one '/grill-me' question that led to an important design decision. If you disagreed with the agent's recommendation, explain what it recommended, why you rejected that recommendation, what you chose instead, and how your choice affected the feature. If you did not disagree with any recommendation, choose a question that was confusing. Explain what you did not understand, the follow-up question(s) you asked, and how you ultimately decided.
+
+# The only decision I really disagreed with was its recomendation on which image to use for the SynchRest product. It wanted to use the one without text to make it look cleaner on the website, but I felt that the text added much more significant context to the item compared to just a woman sleeping on a pillow. This effected the outcome by having it prioritize making the text a little more readable which ended up helping all of the images be more legible on the website.
+
+##Question 2 - Find the upload code. 1. Find the 'ImageField' the agent added to the Product model. Copy that line into your answer and include the filename and line number. Explain what the upload_to value does.
+2.Find the <form> used to upload a product image. Copy the opening <form> tag into your answer and include the filename and line number. Explain why enctype is needed for a file upload.
+
+#1. 'products/models.py' line 78 'image = models.ImageField(upload_to="products/", blank=True)' 'upload_to' determines the storage directory and filename for the image being uploaded, in this case 'products/'. This works with the 'MEDIA_ROOT' setting to find where exactly to upload the 'image' files to their respective products.
+#2. 'products/templates/products/manage_product_form.html' line 13 '<form method="post" enctype="multipart/form-data" class="mt-2 space-y-4">' enctype tells the browser that the '<form>' contains filedata because the default cannot handle large files or binary data needed to upload the images we needed. Without the enctype the file would upload incorrectly as images are not plain text.
+
+##Question 3 - Follow the upload process. Your invented product's image is stored somewhere on disk and served from some URL. Follow the image for the product you created through the application and write:
+
+The path where the image file is stored on disk.
+The value stored in the database for that image.
+The URL the browser requests to display it.
+For each one, name the Django field or setting that determines it and the file where that field or setting is defined. Finally, explain what code makes the media URL work while you run the development server. If you cannot find one of these, ask the agent, check the code, confirm your understanding, and write it up in your own words.
+
+-'MEDIA_ROOT = BASE_DIR/ "media" in config/settings.py' line 146 + the value in the database which is 'products/Carpet_Ai_Art.webp' which relative to the project root is 'media/products/Carpet_Ai_Art/webp'. 
+- The value is stored in the database db.sqlite3 at it's project root 'config/settings.py' line 85-90. Which adds it to the database as the value 'products/Carpet_Ai_Art.webp.
+- 'Media_URL = media/' at 'config/settings.py' line 144. Uses the / after media to show the value is relative, then the product image uses 'upload_to="products/"' from 'products/models.py line 78' to store the file as       '/media/products/Carpet_Ai_Art/webp' which is what's shown in the database. This turns into the above URL which is then served in 'config/urls.py' line 28 but only if the 'DEBUG=True' 
+
 ## Featured Product
 #Question 1 - Trace the feature. Explain how marking a product as featured in the admin interface causes the badge to appear in the storefront. Explain the files involved and the code logic. 
 
