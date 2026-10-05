@@ -28,6 +28,62 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images, grilled and handed off (not yet built)
+
+### Prompts
+
+1. `/grill-me` "create product images for the catalog using the images in
+   @product-images\.These images should match the products they are
+   associated with, and if a product does not have an image it will keep
+   it's existing placeholder instead of a missing file or broken image.
+   Emplyess must also be able to upload product images through the back
+   office, if an employees provides a file the site cannot use, reject it
+   and explain the problem in plain language."
+2. Answers to the grilling questions, in order (one reply each):
+   1. "A" — one optional `Product.image` `ImageField`, no gallery model
+   2. "A" — `SoulSear No Text.png` goes to SoulSear Mark II only
+   3. "B" — the SyncRest **Text** (poster) version, not the No Text one
+   4. "A" — sources move to `products/seed_images/` and are committed; `seed`
+      clears `media/products/` and attaches them
+   5. "A" — normalize every image: longest side ≤ 1200px, WebP, metadata
+      stripped
+   6. "A" — five validation rules, each with its own plain-language message;
+      HEIC rejected, not supported
+   7. "A" — upload, replace, and remove; old files deleted after the save
+      commits
+   8. "b" — 4:3 card frame with `object-contain` on a dark background
+3. `/handoff` "the next session implements the design we just agreed"
+4. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** a design only, with no code written. The eight decisions
+  above, the file-to-product mapping (12 of 34 products get images), the
+  validation messages, and the test list are recorded in `HANDOFF.md` for
+  the next session to implement. No PRD or plan file was written.
+- **Deviations:** one. On question 3 the agent recommended the SyncRest
+  No Text image (it reads better at card size and fits the one-image
+  model), and the user chose the Text poster version. Question 8 was then
+  decided partly because of that choice: `object-contain` keeps the
+  poster's text from being cropped on the cards. Every other answer took
+  the recommended option. The user asked no follow-up questions. After the
+  grilling, the agent offered to write a PRD and plan or to implement
+  right away, and the user chose a `/handoff` instead.
+- **Sideways:** nothing failed. While exploring, the agent found that the
+  uncommitted `config/urls.py` change already serves `MEDIA_URL`, but
+  `config/settings.py` defines neither `MEDIA_URL` nor `MEDIA_ROOT`. This
+  gap was already in the working tree, not caused this session; it is
+  flagged in `HANDOFF.md` as the first thing to fix. The source-image names
+  needed judgment calls: three SoulSear products for one image, two SyncRest
+  versions, and filenames with "GPT"/"Text" suffixes. The agent mapped the
+  unambiguous names itself and asked the user only about SoulSear and
+  SyncRest.
+
 ## 2026-09-27 — Discount coupons, grilled then built; then a coupon-failure pop-up
 
 ### Prompts

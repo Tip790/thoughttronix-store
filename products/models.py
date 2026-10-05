@@ -1,9 +1,10 @@
-from django.db import models
+from django.db import models, transaction
+from django.templatetags.static import static
 from django.urls import reverse
 
 # Categories with a dedicated placeholder illustration; anything else
-# falls back to default.svg. No media handling in the core — placeholder
-# images are static files chosen by category.
+# falls back to default.svg. Products without an uploaded image show
+# their category's placeholder, a static file.
 PLACEHOLDER_CATEGORIES = {
     "home-assistants",
     "neural-implants",
@@ -72,6 +73,9 @@ class Product(models.Model):
         related_name="products",
     )
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
+    # Always a normalized WebP (products/images.py); blank means "use the
+    # category placeholder".
+    image = models.ImageField(upload_to="products/", blank=True)
 
     objects = ProductQuerySet.as_manager()
 
@@ -81,5 +85,40 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        """Save, then delete the replaced or removed image file once committed."""
+        old_name = ""
+        if not self._state.adding:
+            old_name = (
+                Product.objects.filter(pk=self.pk)
+                .values_list("image", flat=True)
+                .first()
+                or ""
+            )
+        super().save(*args, **kwargs)
+        if old_name and old_name != self.image.name:
+            self._delete_image_file_on_commit(old_name)
+
     def get_absolute_url(self):
         return reverse("products:detail", kwargs={"slug": self.slug})
+
+    def delete(self, *args, **kwargs):
+        """Delete the product, then its image file once committed."""
+        name = self.image.name
+        result = super().delete(*args, **kwargs)
+        if name:
+            self._delete_image_file_on_commit(name)
+        return result
+
+    @property
+    def image_url(self):
+        """URL of the product's picture: its own image, else the category placeholder."""
+        if self.image:
+            return self.image.url
+        return static(self.category.placeholder_image)
+
+    def _delete_image_file_on_commit(self, name):
+        # Only after the commit: a rolled-back save must not lose the
+        # file the database still points at.
+        storage = self.image.storage
+        transaction.on_commit(lambda: storage.delete(name))

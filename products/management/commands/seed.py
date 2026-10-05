@@ -13,9 +13,12 @@ Demo logins (documented in the README):
 """
 
 import random
+import shutil
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -25,6 +28,7 @@ from django.utils.text import slugify
 from accounts.models import Address
 from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
+from products.images import normalize_image
 from products.models import Category, Product, Tag
 
 TAGS = [
@@ -427,6 +431,24 @@ CATALOG = {
     ],
 }
 
+# Products with a picture, by slug; the source is seed_images/<slug>.png.
+# Every other product shows its category placeholder.
+SEED_IMAGES_DIR = Path(__file__).resolve().parents[2] / "seed_images"
+SEED_IMAGES = [
+    "seraphine",
+    "hush",
+    "mindsync",
+    "mindsync-duo",
+    "recallpro",
+    "moodset",
+    "dreamweaver",
+    "veil",
+    "calm-collar",
+    "crowdcalm-array",
+    "soulsear-mark-ii",
+    "syncrest",
+]
+
 DEMO_USERS = [
     # (username, password, email, first, last, is_staff, is_superuser, job_title)
     ("admin", "admin123", "admin@example.com", "Ada", "Admin", True, True, None),
@@ -574,6 +596,10 @@ class Command(BaseCommand):
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
+        # Every product is gone, so is every product image — reseeding
+        # mustn't pile up suffixed copies.
+        upload_to = Product._meta.get_field("image").upload_to
+        shutil.rmtree(Path(settings.MEDIA_ROOT) / upload_to, ignore_errors=True)
 
         managed_usernames = [username for username, *_ in DEMO_USERS] + [
             username for username, *_ in BACKGROUND_CUSTOMERS
@@ -591,16 +617,26 @@ class Command(BaseCommand):
                 name=category_name, slug=slugify(category_name)
             )
             for name, price, tagline, description, tag_names, is_available in entries:
+                slug = slugify(name)
                 product = Product.objects.create(
                     name=name,
-                    slug=slugify(name),
+                    slug=slug,
                     price=price,
                     tagline=tagline,
                     description=description,
                     is_available=is_available,
                     category=category,
+                    image=self._seed_image(slug),
                 )
                 product.tags.set(tags[tag_name] for tag_name in tag_names)
+
+    def _seed_image(self, slug):
+        """The product's normalized picture, the same as an upload; "" if none."""
+        if slug not in SEED_IMAGES:
+            return ""
+        path = SEED_IMAGES_DIR / f"{slug}.png"
+        with path.open("rb") as source:
+            return normalize_image(source, path.name)
 
     def _create_users(self):
         User = get_user_model()

@@ -17,6 +17,13 @@ from orders.models import Cart, CartItem
 from products.models import Category, Product, Tag
 
 
+@pytest.fixture(autouse=True)
+def media_root(settings, tmp_path):
+    """Uploaded files go to a per-test temp dir, never the real ``media/``."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    return settings.MEDIA_ROOT
+
+
 @pytest.fixture
 def customer(db):
     return get_user_model().objects.create_user(

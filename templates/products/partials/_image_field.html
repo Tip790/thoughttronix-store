@@ -1,0 +1,30 @@
+{# The product image: current picture (or placeholder note), file picker, remove toggle. #}
+<div>
+  <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+  <div class="mb-3 flex items-center gap-4">
+    {% if form.stored_image %}
+      <img src="{{ form.stored_image.url }}" alt="{{ form.instance.name }}"
+           class="h-24 w-32 rounded-box bg-[#141824] object-contain" />
+      <span class="text-sm opacity-70">Current image</span>
+    {% else %}
+      <span class="text-sm opacity-70">Using the category placeholder</span>
+    {% endif %}
+  </div>
+  {{ field }}
+  {% if field.help_text %}
+    <p class="mt-1 text-xs opacity-60">{{ field.help_text }}</p>
+  {% endif %}
+  {% for error in field.errors %}
+    <p class="mt-1 text-sm text-error">{{ error }}</p>
+  {% endfor %}
+  {% if form.upload_dropped %}
+    <div class="alert alert-warning mt-2" role="alert">
+      <span>Your image wasn't saved because of the problems on this form. Please choose the file again before saving.</span>
+    </div>
+  {% endif %}
+  {% if form.stored_image %}
+    {% with field=form.remove_image %}
+      <div class="mt-3">{% include "products/partials/_field.html" %}</div>
+    {% endwith %}
+  {% endif %}
+</div>
