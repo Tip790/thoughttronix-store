@@ -28,6 +28,72 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images, built from the handoff
+
+### Prompts
+
+1. "@HANDOFF.md Implement this feature"
+2. "how can I manually verify the feature in the browser"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the handoff design is built, uncommitted. Work done:
+  - Settings now define `MEDIA_URL`/`MEDIA_ROOT`, and `media/` is gitignored.
+  - `Product` has an optional `image` field (migration `0004`) and an
+    `image_url` property that falls back to the category placeholder.
+  - `Product.save()`/`delete()` delete old image files only after the save
+    commits.
+  - New module `products/images.py`: images are scaled down to at most
+    1200px, re-encoded as WebP and stripped of metadata.
+  - `ProductForm.clean_image()` applies the five rules, each with its own
+    plain-language message.
+  - The back-office form shows a preview of the stored image, with a remove
+    toggle and a "choose the file again" warning.
+  - Catalog cards use a 4:3 `object-contain` frame on a `#141824` background.
+  - The 12 mapped PNGs moved to `products/seed_images/<slug>.png`; `seed`
+    empties `media/products/` and attaches them.
+  - 21 new tests in `products/test_images.py`, plus an autouse fixture that
+    gives each test a temporary `MEDIA_ROOT`.
+  - Full suite 310 passed, ruff clean.
+  - The agent reseeded the database and checked the running app with
+    `curl`: the catalog, the detail page, the back-office preview, a tiny
+    upload being rejected, and the re-select warning.
+- **Deviations:** the user asked one follow-up question: how to verify the
+  feature by hand in the browser. The agent answered with a checklist and a
+  script that generates test files. The agent itself departed from the
+  handoff in a few places, all stated in its report:
+  - The seed passes the image to `Product.objects.create(...)` (the same
+    path a form save takes) instead of calling `product.image.save(...)`.
+  - It did not delete the leftover `product-images/` folder, which still
+    holds the unused `SyncRest GPT No Text.png`, because the file is
+    untracked and deleting it can't be undone.
+  - It did not write a PROMPTS.md entry until asked, because this file's
+    rules allow entries only by this prompt.
+  - It kept `loading="lazy"` on the detail image as specified, but
+    flagged that the main image should probably load immediately.
+- **Sideways:**
+  - The handoff's design had a gap: after a failed save, `form.instance`
+    already holds the unsaved upload, so its preview URL would be broken.
+    The agent caught this while writing the template and added
+    `ProductForm.stored_image`.
+  - A decompression-bomb test case set its limit so both cases tested
+    Pillow's warning, not its error. The agent noticed after the first run
+    and fixed the case.
+  - Ruff's DJ012 rule took two tries to satisfy, because it counts
+    `delete` as a custom method.
+  - The live-server check failed at first because of shell scripting
+    mistakes: the scratchpad folder didn't exist, Django 6's `shell` banner
+    got into captured values, and Windows `\r` line endings broke the URL.
+    The agent fixed each one and re-ran the check.
+  - There was no browser driver, so the check used `curl` rather than
+    screenshots. Nobody has looked at the visual layout yet.
+
 ## 2026-10-04 — Product images, grilled and handed off (not yet built)
 
 ### Prompts
