@@ -5,19 +5,33 @@ from .models import Address, User
 
 
 class SignupForm(UserCreationForm):
-    """Django's stock signup fields — username plus password and confirmation.
+    """Username, email, and password with confirmation.
 
-    No email: signing up asks for the minimum. The widgets carry DaisyUI
-    classes because plain Django forms own their own styling here.
+    The email is required — it's how a customer recovers their account —
+    and must not belong to another account in any capitalization. The
+    database constraint is only a backstop; this form gives the friendly
+    error. The widgets carry DaisyUI classes because plain Django forms
+    own their own styling here.
     """
 
     class Meta(UserCreationForm.Meta):
         model = User
+        fields = ("username", "email")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["email"].required = True
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(
+                "That email is already in use. Sign in instead, or reset "
+                "your password if you've forgotten it."
+            )
+        return email
 
 
 class SignInForm(AuthenticationForm):

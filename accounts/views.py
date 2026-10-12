@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.messages.views import SuccessMessageMixin
@@ -13,16 +14,21 @@ from .models import Address
 
 
 class SignupView(SuccessMessageMixin, CreateView):
-    """Create a customer account, then hand off to the login page.
+    """Create a customer account and sign the new customer straight in.
 
-    New users sign in themselves — auto-login after signup is left as a
-    student exercise.
+    They land on the catalog, ready to shop, without retyping the
+    password they just chose.
     """
 
     form_class = SignupForm
     template_name = "accounts/signup.html"
-    success_url = reverse_lazy("accounts:login")
-    success_message = "Account created — you can now sign in."
+    success_url = reverse_lazy("products:catalog")
+    success_message = "Welcome to ThoughtTronix — your account is ready."
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        login(self.request, self.object)
+        return response
 
 
 class SignInView(LoginView):

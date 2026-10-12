@@ -28,6 +28,202 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 1: sign-up takes an email, then signs you in
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 1"
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 1 of `plans/account-security.md`.
+  - `User.save()` stores every email in lowercase.
+  - A new constraint, `unique_user_email_ci`, rejects two accounts whose
+    emails differ only in capitalization. It compares lowercased values,
+    so even a bulk `update()` can't slip a duplicate past it. The migration
+    is `accounts/migrations/0003_user_email_unique_ci.py`.
+  - `SignupForm` requires an email and gives a friendly "already in use"
+    error for a taken one, in any capitalization.
+  - `SignupView` signs the new customer in and sends them to the catalog,
+    and its "student exercise" docstring was updated.
+  - The old sign-up test, which expected the user to be signed out
+    afterwards, was rewritten. New tests cover a missing email, a duplicate
+    email in another capitalization, the password rules, lowercase storage,
+    the database rejecting duplicates from `create_user` and `update()`,
+    and several users with blank emails.
+
+  All 318 tests passed, and `ruff check` and `ruff format --check` were
+  clean. The migration applied cleanly to a scratch copy of `db.sqlite3`,
+  whose 12 users already had distinct lowercase emails. The committed
+  database itself was not migrated. Nothing was committed.
+
+  In answer to prompt 2, the agent gave an eight-step checklist for testing
+  in the browser, the Django admin and the shell, one step per acceptance
+  criterion.
+- **Deviations:** the agent made one decision the plan doesn't spell out.
+  The constraint lets any number of users have a blank email. The plan
+  calls for unique emails "however a user is created". A strict rule would
+  break the test fixtures, which create users with no email. It would also
+  conflict with phase 6, which blanks the email of every deleted account.
+  The agent explained this in its final report. The user asked one
+  follow-up question (prompt 2) and made no corrections.
+- **Sideways:** nothing failed.
+  - The agent did not migrate the committed `db.sqlite3`, a grading
+    snapshot, and left that to the user.
+  - The new migration's header says 2026-10-12, because `makemigrations`
+    stamps the date in UTC.
+  - The agent did not run the manual checklist itself. The user has not
+    yet reported results from it.
+  - The checklist's cleanup step offered `seed` as a way to remove the
+    `tester1` test account. But `seed` only resets the demo accounts and
+    leaves other users in place. Deleting `tester1` in the admin is the
+    cleanup that actually works.
+
+## 2026-10-11 — Account security PRD broken into a seven-phase plan (not yet built)
+
+### Prompts
+
+1. "/prd-to-plan @prd/account-security.md"
+2. "merge plans 6+7 and 4+5"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent read the PRD and explored `accounts`,
+  `orders.Order`, the staff order templates, settings, and the core
+  platform plan. It then proposed nine vertical-slice phases. After the
+  user asked for two merges, it wrote `plans/account-security.md` with
+  seven phases:
+  1. sign-up with email and auto-login;
+  2. email confirmation and the Account page;
+  3. forgot password;
+  4. change password and change email;
+  5. sign-in hardening (Remember me and throttling);
+  6. account deletion (`Order.user` to `PROTECT`, plus `anonymize()`);
+  7. production hardening.
+
+  The plan's header records the durable decisions: `accounts` owns the
+  feature, the `User` model changes, the `accounts:` URL namespace with
+  POST-only state changes, and settings read from `.env`. No code was
+  written.
+- **Deviations:** the agent offered the two merges (Remember me with
+  throttling, and password change with email change) only as options, not
+  recommendations. The user took both. The user did not answer two
+  questions:
+  - whether to move the email throttle earlier, so that reset and
+    verification emails are rate-limited from the start;
+  - whether to split account deletion into two phases.
+
+  The plan keeps the proposed defaults: throttling in phase 5, and deletion
+  as one phase. As a result, phases 2–4 ship emails with no rate limit
+  until phase 5 lands. The agent pointed this out after writing the plan.
+- **Sideways:** nothing went wrong. Exploring the code confirmed that
+  staff order screens show `order.user.username`, so phase 6 includes
+  labelling anonymized customers as deleted customers on those screens.
+
+## 2026-10-11 — Account security, grilled and written up as a PRD (not yet built)
+
+### Prompts
+
+1. "/grill-me Create more account securtiy feautres such as the ability to
+   provide an email address and password to create an account, change
+   passwords, reset a forgotten password through email, and any additional
+   security features deemed beneficial."
+2. "A" (Q1: keep username sign-in; email required and unique)
+3. "b" (Q2: case-insensitive database constraint on email, plus a form
+   error)
+4. "B" (Q3: email backend read from `.env`, console by default)
+5. "c" (Q4: neutral "if an account exists" reset message, plus a spam/typo
+   tip)
+6. "If the emails used are not actual emails but instead demo emails what
+   would you recommend instead?" (follow-up on Q5, email verification)
+7. "B then" (Q5: verify without blocking; seeded users pre-verified)
+8. "b" (Q6: reset links go to unverified emails too; finishing a reset
+   verifies the email)
+9. "c" (Q7: email change needs the current password; the new address is
+   verified and the old one gets a notice)
+10. "b" (Q8: email a notice after every password change or reset; no
+    auto-login after reset)
+11. "c" (Q9: cache-based throttle on sign-in and on reset/verification
+    emails)
+12. "b" (Q10: "Remember me" checkbox)
+13. "b" (Q11: secure cookies, HTTPS redirect, and short HSTS on when
+    `DEBUG=False`)
+14. "2" (Q12: add account deletion; no 2FA, no sign-in history)
+15. "b" (Q13: deletion anonymizes; orders kept and scrubbed; `Order.user`
+    becomes `PROTECT`)
+16. "b" (Q14: only customers can delete themselves)
+17. "b" (Q15: auto sign-in after sign-up)
+18. "/to-prd"
+19. "Append a session log to PROMPTS.md at the repo root, under today's
+    date, newest entry at the top. Record every prompt I gave you this
+    session, in order, including any corrections. End the entry with a
+    short summary: the outcome, any places where I deviated from a
+    recommended answer or asked follow-up questions, and anything that went
+    sideways."
+
+### Summary
+
+- **Outcome:** a grilling session of 15 questions led to a new PRD,
+  `prd/account-security.md`, which amends the core platform PRD's "no
+  email at sign-up". No code was written. The agreed design:
+  - Sign-in stays username-based. Email becomes required at sign-up and is
+    unique ignoring case, enforced by a database constraint.
+  - Email verification never blocks shopping. Seeded users are
+    pre-verified.
+  - Password reset uses Django's built-in views. The reset page shows the
+    same message whether or not the email has an account, and finishing a
+    reset also verifies the email.
+  - Password change uses Django's built-in view. An email change needs the
+    current password.
+  - Security notices go out by email after a password change or reset,
+    and to the old address after an email change.
+  - A cache-based throttle limits failed sign-ins and reset/verification
+    emails. Sign-in gets a "Remember me" checkbox.
+  - Production security settings turn on when `DEBUG=False`.
+  - New customers are signed in right after sign-up.
+  - Customers (not staff) can delete their accounts. Deletion anonymizes
+    the user and keeps their orders with personal details blanked, and
+    `Order.user` changes to `PROTECT`.
+- **Deviations:** every answer took the recommended option. On Q5 (email
+  verification), the user asked a follow-up about demo-only emails before
+  answering. The agent explained that the console backend prints
+  verification links to the terminal, and kept B as its recommendation,
+  adding that seeded users should be pre-verified. Q12 offered a combination
+  of options. The agent recommended "none" (stop at what was already
+  designed). The user chose account deletion instead, which led to Q13 and
+  Q14.
+- **Sideways:**
+  - During Q3, a stray `B` was typed onto the end of `CLAUDE.md` line 47,
+    apparently by accident. The agent flagged it three times but did not
+    edit the file, and it is still there.
+  - While exploring for Q13, the agent found that `Order.user` used
+    `CASCADE`, so deleting any user would already have deleted their
+    orders and changed the dashboard's revenue figures. The PRD fixes this
+    with `PROTECT`.
+  - When writing the PRD, the agent made three small decisions that were
+    never asked:
+    - the stored last 4 card digits are kept on anonymized orders;
+    - a successful sign-in doesn't reset the per-IP failure count;
+    - reset requests over the limit still show the usual message but send
+      nothing.
+
+    It reported all three to the user.
+
 ## 2026-10-04 — Product images, built from the handoff
 
 ### Prompts

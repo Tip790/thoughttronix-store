@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from django.db import models, transaction
+from django.db.models.functions import Lower
 
 # US-only, like checkout. Shared by saved addresses and ``CheckoutForm``;
 # ``accounts`` sits at the bottom of the dependency chain, so both live here.
@@ -73,6 +74,26 @@ class User(AbstractUser):
 
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            # Emails are stored lowercase (see ``save``), but the constraint
+            # compares lowercased values so a bulk ``update()`` can't sneak
+            # a differently-cased duplicate past it. Blank emails are
+            # exempt: users made before sign-up required an email have none.
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=~models.Q(email=""),
+                name="unique_user_email_ci",
+                violation_error_message="A user with that email already exists.",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Every path that creates a user — sign-up, admin, seed, shell —
+        # funnels through here, so this is the one place to normalize.
+        self.email = self.email.lower()
+        super().save(*args, **kwargs)
 
 
 class AddressManager(models.Manager):
