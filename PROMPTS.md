@@ -28,6 +28,142 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 7, continued: questions about the design
+
+### Prompts
+
+This session continues the one in the entry below. That entry, which
+logs prompts 1–5, is left as written. The numbering carries on from it.
+
+6. "was phase 7 necessary or can it be removed?"
+7. "why is the SignupView class  success_url =
+   reverse_lazy("products:catalog") and not success_url =
+   reverse_lazy("accounts:login")?"
+8. "@config/settings.py why is it EMAIL_BACKEND =
+   env.str("EMAIL_BACKEND", default="accounts.mail.ConsoleEmailBackend")
+   and not EMAIL_BACKEND =
+   "django.core.mail.backends.console.EmailBackend"?"
+9. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that
+   went sideways."
+
+### Summary
+
+- **Outcome:** these were questions only, and no code changed. Phase 7 is
+  still in the working tree, uncommitted.
+  - **Prompt 6:** the agent said phase 7 isn't needed to run the app,
+    since it changes nothing while `DEBUG` is on, but recommended keeping
+    it. The reasons it gave:
+    - the PRD's problem statement and stories 42–43 ask for it;
+    - it keeps reset and verification links and session cookies off
+      plain HTTP once the app is deployed;
+    - it is about 20 lines of settings.
+
+    It laid out what removing it would take: revert the settings and
+    `.env.example`, delete the test file, and move stories 42–43 out of
+    the PRD and plan. It also offered a middle option that drops only
+    the two extra HSTS flags, then asked which of the three the user
+    wanted.
+  - **Prompt 7:** the agent traced the change in `git log`. The core
+    platform did send new users to `accounts:login`, and its docstring
+    left auto-login "as a student exercise". Account security phase 1
+    (`97099a1`) did that exercise, for PRD story 5. The view now calls
+    `login()` before the redirect, so going to the sign-in page would ask
+    a signed-in user to sign in again. The agent listed everything a
+    reversal would touch.
+  - **Prompt 8:** the agent gave two reasons. `env.str` lets `.env`
+    switch to SMTP with no code change (PRD stories 39–40 and the
+    `CLAUDE.md` environs rule). The custom `accounts.mail` backend
+    exists because Django's console backend wraps lines at 78
+    characters. Long token links then print quoted-printable, split by
+    `=`, and can't be copied from the terminal, which the PRD's demo
+    relies on. A test pins this.
+- **Deviations:** prompts 6–8 were all follow-up questions. The user
+  didn't answer the keep / middle / remove question from prompt 6, or
+  the earlier question about the two extra HSTS flags. Both are still
+  open.
+- **Sideways:** nothing failed. The entry below already logs this
+  session's first five prompts, and the log is never rewritten. So the
+  rest of the session went into this new entry instead of being folded
+  into that one.
+
+## 2026-10-11 — Account security phase 7: production hardening
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 7."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Reco" (cut off mid-sentence). The user
+   rejected the agent's edit for it.
+4. The same cut-off prompt, sent again. The user rejected this edit
+   too.
+5. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that
+   went sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 7 of `plans/account-security.md`.
+  - **Settings:** `config/settings.py` now sets `SESSION_COOKIE_SECURE`,
+    `CSRF_COOKIE_SECURE` and `SECURE_SSL_REDIRECT` to `not DEBUG`.
+    `SECURE_HSTS_SECONDS` is 0 with debug on and an hour with debug off.
+    Each one can be overridden from `.env`. A comment explains that
+    running with debug off on a laptop without HTTPS also needs the
+    redirect turned off, and the two cookie flags too if you want to stay
+    signed in. `.env.example` gained a commented block listing every
+    override.
+  - **Tests:** the new `accounts/test_production_settings.py` has 15
+    tests. Each one loads a fresh copy of the settings file under a given
+    environment, with `env.read_env` stubbed out so a developer's own
+    `.env` can't leak in. They cover:
+    - no flags with debug on, or with no environment at all;
+    - every flag on with debug off, and HSTS at an hour or less;
+    - overrides in both directions;
+    - Django's deployment security checks returning nothing with the
+      production values.
+
+    Suite: 426 passed. Ruff and `manage.py check` were clean, and so was
+    `check --deploy` with `DEBUG=False` and a generated `SECRET_KEY`.
+    Nothing was committed.
+  - **Manual check:** in answer to prompt 2, the agent gave PowerShell
+    steps that don't use the browser:
+    - `curl.exe -I` to see the 200 with debug on and the 301 to
+      `https://` with debug off (set through a temporary `.env`);
+    - a `manage.py shell` session that sends a fake HTTPS request to see
+      the HSTS header and the `Secure` cookie;
+    - `check --deploy` with debug off and then on;
+    - turning `SECURE_SSL_REDIRECT=False` on to see the redirect go away.
+
+    It warned that browsers cache the 301, and that static files aren't
+    served with debug off.
+- **Deviations:** no questions were asked. One addition beyond the
+  plan's four flags: the first `check --deploy` run still gave two
+  warnings, W005 and W021. To clear them, `SECURE_HSTS_INCLUDE_SUBDOMAINS`
+  and `SECURE_HSTS_PRELOAD` were also set to `not DEBUG`, and both can be
+  overridden. Preload does nothing at a one-hour lifetime. Including
+  subdomains makes every subdomain of the deployed domain use HTTPS for
+  that hour. The agent flagged this as the user's decision and offered
+  silencing the two checks as the alternative. The user didn't answer.
+  Prompt 2 was a follow-up question.
+- **Sideways:**
+  - The extra two flags were found only by running `check --deploy`, not
+    from reading the plan.
+  - The log prompt arrived cut off twice. Each time the agent read it as
+    the standard log prompt and wrote an entry, and each time the user
+    rejected the edit without comment. The full prompt came third.
+  - The behaviour was only checked through tests and command-line
+    checks, not by hand: neither the redirect nor the headers were looked
+    at against a running server.
+
 ## 2026-10-11 — Account security phase 6: account deletion
 
 ### Prompts

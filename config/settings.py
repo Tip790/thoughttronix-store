@@ -27,6 +27,30 @@ DEBUG = env.bool("DEBUG", default=True)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# Production hardening: with DEBUG off, cookies travel only over HTTPS,
+# plain HTTP is redirected, and browsers are told (HSTS) to use HTTPS for
+# an hour. With DEBUG on (the local default), all of it stays off. Each
+# can be overridden from .env. Running with DEBUG=False on a laptop
+# without HTTPS also needs SECURE_SSL_REDIRECT=False (and the two cookie
+# flags off to stay signed in), or every page redirects to https://.
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=not DEBUG)
+
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=not DEBUG)
+
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
+
+# Kept short on purpose: a long HSTS policy is hard to undo if HTTPS is
+# ever misconfigured. Lengthen it once a deployment is stable.
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0 if DEBUG else 60 * 60)
+
+# Both satisfy `check --deploy`. Preload is inert at an hour: the browser
+# preload list only accepts policies of a year or more.
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=not DEBUG
+)
+
+SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=not DEBUG)
+
 
 # Application definition
 
