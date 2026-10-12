@@ -142,6 +142,9 @@ class Order(models.Model):
     digits survive checkout. A coupon's effect is copied too — code,
     percent, and amount — so retiring or editing the coupon changes
     nothing here; the ``coupon`` FK is ``PROTECT`` so it can't vanish.
+    The ``user`` FK is ``PROTECT`` too: deleting a customer would rewrite
+    revenue history, so a customer who has ordered is anonymized instead
+    (``User.anonymize``), which blanks the personal fields here.
     """
 
     class Status(models.TextChoices):
@@ -152,7 +155,7 @@ class Order(models.Model):
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="orders",
     )
     status = models.CharField(

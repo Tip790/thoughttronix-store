@@ -10,8 +10,13 @@
   </div>
   <p class="mt-1 opacity-70">
     Placed {{ order.created_at|date:"F j, Y" }} by
-    <span class="font-semibold">{{ order.user.username }}</span>
-    ({{ order.email }}) · card ending {{ order.card_last4 }}
+    {% if order.user.is_anonymized %}
+      <span class="font-semibold italic">a deleted customer</span>
+    {% else %}
+      <span class="font-semibold">{{ order.user.username }}</span>
+      ({{ order.email }})
+    {% endif %}
+    · card ending {{ order.card_last4 }}
   </p>
 
   <div class="mt-6 overflow-x-auto rounded-box bg-base-100 shadow-md">
@@ -54,23 +59,31 @@
     <div class="card bg-base-100 shadow-md">
       <div class="card-body">
         <h3 class="card-title text-base">Shipping address</h3>
-        <address class="text-sm not-italic opacity-80">
-          {{ order.shipping_name }}<br>
-          {{ order.shipping_street }}<br>
-          {% if order.shipping_line2 %}{{ order.shipping_line2 }}<br>{% endif %}
-          {{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_zip }}
-        </address>
+        {% if order.user.is_anonymized %}
+          <p class="text-sm italic opacity-60">Removed when the customer deleted their account.</p>
+        {% else %}
+          <address class="text-sm not-italic opacity-80">
+            {{ order.shipping_name }}<br>
+            {{ order.shipping_street }}<br>
+            {% if order.shipping_line2 %}{{ order.shipping_line2 }}<br>{% endif %}
+            {{ order.shipping_city }}, {{ order.shipping_state }} {{ order.shipping_zip }}
+          </address>
+        {% endif %}
       </div>
     </div>
     <div class="card bg-base-100 shadow-md">
       <div class="card-body">
         <h3 class="card-title text-base">Billing address</h3>
-        <address class="text-sm not-italic opacity-80">
-          {{ order.billing_name }}<br>
-          {{ order.billing_street }}<br>
-          {% if order.billing_line2 %}{{ order.billing_line2 }}<br>{% endif %}
-          {{ order.billing_city }}, {{ order.billing_state }} {{ order.billing_zip }}
-        </address>
+        {% if order.user.is_anonymized %}
+          <p class="text-sm italic opacity-60">Removed when the customer deleted their account.</p>
+        {% else %}
+          <address class="text-sm not-italic opacity-80">
+            {{ order.billing_name }}<br>
+            {{ order.billing_street }}<br>
+            {% if order.billing_line2 %}{{ order.billing_line2 }}<br>{% endif %}
+            {{ order.billing_city }}, {{ order.billing_state }} {{ order.billing_zip }}
+          </address>
+        {% endif %}
       </div>
     </div>
     <div class="card bg-base-100 shadow-md">

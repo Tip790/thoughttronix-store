@@ -72,6 +72,10 @@ class User(AbstractUser):
     plain users, employees are ``is_staff``, the admin is ``is_superuser``.
     """
 
+    # Deleted accounts are renamed ``deleted-user-<pk>``; sign-up refuses
+    # usernames that start this way so nobody can pose as one.
+    ANONYMIZED_USERNAME_PREFIX = "deleted-user-"
+
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
     # Drives the Account page's "confirmed" badge only — an unconfirmed
@@ -107,6 +111,50 @@ class User(AbstractUser):
         self.email = email
         self.email_verified = False
         self.save(update_fields=["email", "email_verified"])
+
+    @property
+    def is_anonymized(self):
+        """Whether this account was deleted by its owner (see ``anonymize``)."""
+        return not self.is_active and self.username == self.anonymized_username()
+
+    def anonymized_username(self):
+        return f"{self.ANONYMIZED_USERNAME_PREFIX}{self.pk}"
+
+    @transaction.atomic
+    def anonymize(self):
+        """Delete the person, keep the business record.
+
+        The account is scrubbed and switched off for good, and the saved
+        addresses and cart go with it. Past orders stay for the store's
+        books — totals, items, statuses, coupons, dates and card last four
+        untouched — but the email, names and addresses on them are
+        blanked. ``Order.user`` is ``PROTECT``, so this is the only way to
+        remove a customer who has ordered.
+        """
+        self.username = self.anonymized_username()
+        self.email = ""
+        self.first_name = ""
+        self.last_name = ""
+        self.job_title = None
+        self.email_verified = False
+        self.is_active = False
+        self.set_unusable_password()
+        self.save()
+
+        self.addresses.all().delete()
+        cart = getattr(self, "cart", None)
+        if cart is not None:
+            cart.delete()
+        # Orders name their address columns ``shipping_<field>`` and
+        # ``billing_<field>``, after ``Address.FIELDS``.
+        self.orders.update(
+            email="",
+            **{
+                f"{role}_{field}": ""
+                for role in Address.ROLES
+                for field in Address.FIELDS
+            },
+        )
 
 
 class AddressManager(models.Manager):

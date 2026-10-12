@@ -42,7 +42,13 @@
                 <a href="{% url 'orders:manage_order_detail' order.pk %}"
                    class="link-hover font-mono font-semibold">{{ order.number }}</a>
               </td>
-              <td>{{ order.user.username }}</td>
+              <td>
+                {% if order.user.is_anonymized %}
+                  <span class="italic opacity-60">Deleted customer</span>
+                {% else %}
+                  {{ order.user.username }}
+                {% endif %}
+              </td>
               <td>{{ order.created_at|date:"M j, Y" }}</td>
               <td>{% include "orders/partials/_status_badge.html" %}</td>
               <td class="text-right font-semibold">${{ order.total|intcomma }}</td>

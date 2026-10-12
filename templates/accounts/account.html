@@ -68,5 +68,24 @@
         </div>
       </div>
     </section>
+
+    <section class="card bg-base-100 shadow-md sm:col-span-2">
+      <div class="card-body">
+        <h2 class="card-title">Close your account</h2>
+        {% if user.is_staff or user.is_superuser %}
+          <p class="text-sm opacity-70">
+            Staff accounts are closed by an administrator. Ask one when it's time to go.
+          </p>
+        {% else %}
+          <p class="text-sm opacity-70">
+            Delete your account and the personal details we hold. Your past
+            orders stay on our books, with nothing identifying you left on them.
+          </p>
+          <div class="card-actions">
+            <a href="{% url 'accounts:account_delete' %}" class="btn btn-outline btn-error btn-sm">Delete account</a>
+          </div>
+        {% endif %}
+      </div>
+    </section>
   </div>
 {% endblock %}

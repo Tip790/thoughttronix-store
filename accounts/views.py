@@ -1,9 +1,10 @@
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -26,6 +27,7 @@ from .forms import (
     AddressForm,
     ChangeEmailForm,
     ChangePasswordForm,
+    DeleteAccountForm,
     NewPasswordForm,
     PasswordResetRequestForm,
     SignInForm,
@@ -236,6 +238,43 @@ class EmailChangeView(LoginRequiredMixin, FormView):
         else:
             follow_up = "You can ask for a confirmation link from this page later."
         messages.success(self.request, f"Your email is now {user.email}. {follow_up}")
+        return super().form_valid(form)
+
+
+# --- Deleting the account ----------------------------------------------------
+
+
+class AccountDeleteView(LoginRequiredMixin, FormView):
+    """Customers delete their own account, confirmed with the password.
+
+    The account is anonymized, not deleted outright, so past orders stay
+    on the store's books with nothing identifying left on them. Staff and
+    superusers are refused even when the URL is posted directly — an
+    administrator closes staff accounts, so nobody can lock the team out
+    of the back office.
+    """
+
+    form_class = DeleteAccountForm
+    template_name = "accounts/account_delete.html"
+    success_url = reverse_lazy("products:catalog")
+
+    def dispatch(self, request, *args, **kwargs):
+        user = request.user
+        if user.is_authenticated and (user.is_staff or user.is_superuser):
+            raise PermissionDenied("Ask an administrator to close a staff account.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        self.request.user.anonymize()
+        logout(self.request)
+        # Flash after logout, which flushes the session.
+        messages.success(
+            self.request,
+            "Your account has been deleted. Thanks for thinking with us.",
+        )
         return super().form_valid(form)
 
 

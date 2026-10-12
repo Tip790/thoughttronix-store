@@ -28,6 +28,70 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 6: account deletion
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 6."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 6 of `plans/account-security.md`.
+  - **Protected orders:** `Order.user` changed from `CASCADE` to
+    `PROTECT`, with migration `orders/0004_order_user_protect.py`. It was
+    applied to the committed `db.sqlite3`. The agent checked first that
+    `seed` deletes orders before users, so the change doesn't break it.
+  - **`User.anonymize()`:** one transaction. It renames the user to
+    `deleted-user-<pk>`, clears the email, names and job title, unsets
+    `email_verified`, sets an unusable password and deactivates the
+    account. It deletes the user's addresses and cart, and blanks the
+    email and every `shipping_*` / `billing_*` field on their orders.
+    The field names come from `Address.ROLES` × `Address.FIELDS`, so
+    `accounts` never imports `orders`. A new `is_anonymized` property
+    (inactive and the placeholder username) drives the staff screens.
+  - **Delete view:** `AccountDeleteView` at `/accounts/delete/`
+    (`accounts:account_delete`) takes the current password through a new
+    `DeleteAccountForm`. It anonymizes the account, signs the user out
+    and shows a confirmation on the catalog. Staff and superusers get a
+    403 from `dispatch`. `ChangeEmailForm`'s password check moved into a
+    shared `CurrentPasswordForm` base. A new template,
+    `accounts/account_delete.html`, holds the confirmation page. The
+    Account page gained a "Close your account" card, which tells staff to
+    ask an administrator.
+  - **Staff order screens:** the order list shows "Deleted customer". The
+    order detail says "a deleted customer", hides the email, and replaces
+    each address card with a "removed" note.
+  - **Tests:** the new `accounts/test_account_deletion.py` has 18 tests.
+    They cover `ProtectedError`, the Django admin refusing deletion,
+    scrubbing of the user, addresses, cart and orders, unchanged totals
+    and dashboard revenue, the wrong and correct password, the old
+    credentials failing, staff being refused, and the staff screens.
+    Suite: 412 passed, ruff clean, `manage.py check` clean. Nothing was
+    committed.
+  - **Browser walkthrough:** in answer to prompt 2, the agent gave a
+    step-by-step check using the seeded `admin`, `employee` and
+    `customer` accounts, with re-seeding afterwards.
+- **Deviations:** no questions were asked and no recommendations were
+  overridden. One addition beyond the plan: sign-up now refuses usernames
+  starting with `deleted-user-` (any capitalization). This stops a
+  customer from looking like a deleted account in the staff screens, or
+  from taking a placeholder username that a later deletion needs. It was
+  called out in the report. Prompt 2 was a follow-up question.
+- **Sideways:** little went wrong. `ruff format --check` flagged the new
+  test file after the first run, and it was reformatted. The new
+  templates add Tailwind classes (`btn-error`, `list-disc`, `italic`)
+  that need the CSS watcher or `tailwind build` to rebuild. The phase
+  was not checked in a browser; the tests only check the rendered HTML.
+
 ## 2026-10-11 — Account security phase 5: Remember me and throttling
 
 ### Prompts

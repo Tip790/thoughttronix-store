@@ -31,6 +31,14 @@ class SignupForm(UserCreationForm):
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
 
+    def clean_username(self):
+        username = super().clean_username()
+        if username.lower().startswith(User.ANONYMIZED_USERNAME_PREFIX):
+            raise forms.ValidationError(
+                "That username is reserved. Please choose another."
+            )
+        return username
+
     def clean_email(self):
         email = self.cleaned_data["email"].lower()
         if User.objects.filter(email__iexact=email).exists():
@@ -137,16 +145,13 @@ class ChangePasswordForm(PasswordChangeForm):
             field.widget.attrs["class"] = "input w-full"
 
 
-class ChangeEmailForm(forms.Form):
-    """A new email, confirmed with the current password.
+class CurrentPasswordForm(forms.Form):
+    """A form that's only valid with the signed-in user's current password.
 
-    The password check means someone who borrowed a signed-in session
-    can't redirect the account's recovery email to themselves. Like
-    sign-up, a new email must not belong to another account in any
-    capitalization.
+    The check means someone who borrowed a signed-in session can't use
+    it for the account's most serious changes.
     """
 
-    email = forms.EmailField(label="New email")
     password = forms.CharField(
         label="Current password",
         strip=False,
@@ -156,9 +161,33 @@ class ChangeEmailForm(forms.Form):
     def __init__(self, user, *args, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
-        self.fields["email"].widget.attrs["autocomplete"] = "email"
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "Your current password was entered incorrectly. Please try again."
+            )
+        return password
+
+
+class ChangeEmailForm(CurrentPasswordForm):
+    """A new email, confirmed with the current password.
+
+    The password check means someone who borrowed a signed-in session
+    can't redirect the account's recovery email to themselves. Like
+    sign-up, a new email must not belong to another account in any
+    capitalization.
+    """
+
+    email = forms.EmailField(label="New email")
+    field_order = ["email", "password"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].widget.attrs["autocomplete"] = "email"
 
     def clean_email(self):
         email = self.cleaned_data["email"].lower()
@@ -168,13 +197,9 @@ class ChangeEmailForm(forms.Form):
             raise forms.ValidationError("That email is already in use.")
         return email
 
-    def clean_password(self):
-        password = self.cleaned_data["password"]
-        if not self.user.check_password(password):
-            raise forms.ValidationError(
-                "Your current password was entered incorrectly. Please try again."
-            )
-        return password
+
+class DeleteAccountForm(CurrentPasswordForm):
+    """Confirm account deletion by re-entering the current password."""
 
 
 class AddressForm(forms.ModelForm):
