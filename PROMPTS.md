@@ -28,6 +28,89 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 5: Remember me and throttling
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 5."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 5 of `plans/account-security.md`.
+  - **Remember me:** `SignInForm` gained an unchecked `remember_me`
+    checkbox. `SignInView.form_valid` sets the session to end when the
+    browser closes (`set_expiry(0)`), or to the standard two weeks when
+    the box is ticked. `SignupView` also uses `set_expiry(0)` after its
+    auto-login. `templates/accounts/login.html` renders the checkbox with
+    the label beside it.
+  - **Throttle:** a new `accounts/throttle.py` keeps counters in the
+    default local-memory cache, each in a fixed window. There are four
+    new settings in `config/settings.py`, each readable from `.env`:
+    `SIGN_IN_THROTTLE_LIMIT`/`_WINDOW` (5 per 15 min) and
+    `EMAIL_THROTTLE_LIMIT`/`_WINDOW` (3 per hour).
+    - **Sign-in:** `SignInForm.clean` refuses sign-in before checking
+      the password once a username or IP is over the limit. It counts
+      only `invalid_login` failures. A success clears the username's
+      count but not the IP's.
+    - **Reset emails:** the cap is applied in
+      `PasswordResetRequestForm.send_mail`, so the page doesn't change
+      when nothing is sent.
+    - **Confirmation emails:** the cap is applied in
+      `send_verification_email`, which now returns whether it sent.
+      `ResendVerificationView` shows a warning when over the limit, and
+      `EmailChangeView` changes its success message.
+  - **Tests:** a new autouse `clear_cache` fixture in `conftest.py`
+    empties the cache before every test. The new
+    `accounts/test_sign_in_hardening.py` adds 16 tests. 394 tests
+    passed, and `ruff check` and `ruff format` were clean. Nothing was
+    committed.
+
+  Prompt 2 got a browser checklist covering:
+  - the `sessionid` cookie's Expires column in DevTools, with and
+    without Remember me;
+  - the lockout on the 6th sign-in attempt;
+  - the IP count surviving a successful sign-in;
+  - the 4th reset and confirmation requests sending no email.
+
+  It noted that restarting the server clears the counts and that every
+  local request shares 127.0.0.1. It ended with `git restore db.sqlite3`.
+- **Deviations:** the user didn't override any recommendation and asked
+  one follow-up question (prompt 2). The agent made four choices the
+  plan doesn't settle, and reported them:
+  - Reset and confirmation emails have separate per-address limits, not
+    one shared count.
+  - A confirmation-link request over the limit shows a warning instead
+    of the usual success message.
+  - The IP comes from `REMOTE_ADDR`, so behind a proxy every visitor
+    would share one IP.
+  - Usernames and addresses are lowercased before counting.
+- **Sideways:**
+  - An attempt to read Django's source through `uv run python -c` failed
+    with `ImproperlyConfigured`, because settings weren't loaded. The
+    agent used Grep on the installed package instead.
+  - That check showed Django passes `to_email` to `send_mail`
+    positionally. The agent's first override had guessed at the argument
+    order through `*args` indexing, so it was rewritten with the real
+    signature.
+  - The first full test run had 3 failures, all in the new tests:
+    - The `is_signed_in` helper read the Account page's context, which
+      is `None` when an anonymous visitor is redirected. It now checks
+      the session.
+    - The resend test collected messages from earlier requests that
+      hadn't been followed, so it saw several messages instead of one.
+  - `ruff format` then reformatted two files.
+  - Nothing was checked in a browser, and the new `checkbox` DaisyUI
+    class needs a Tailwind rebuild to be styled.
+
 ## 2026-10-11 — Account security phase 4: change password and change email
 
 ### Prompts

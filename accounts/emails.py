@@ -9,6 +9,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
 
+from . import throttle
 from .tokens import make_verification_token
 
 
@@ -26,14 +27,21 @@ def send_account_email(name, to, context):
     send_mail(" ".join(subject.split()), body, None, [to])
 
 
-def send_verification_email(request, user):
-    """Send ``user`` a link that confirms their current email address."""
+def send_verification_email(request, user) -> bool:
+    """Send ``user`` a link that confirms their current email address.
+
+    Returns whether it went out: each address gets only a few links an
+    hour, so nobody can flood an inbox with them.
+    """
+    if not user.email or not throttle.allow_email("verify", user.email):
+        return False
     path = reverse("accounts:verify_email", args=[make_verification_token(user)])
     send_account_email(
         "verify_email",
         user.email,
         {"user": user, "verify_url": request.build_absolute_uri(path)},
     )
+    return True
 
 
 def send_password_changed_email(request, user):

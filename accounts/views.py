@@ -40,7 +40,8 @@ class SignupView(SuccessMessageMixin, CreateView):
 
     They land on the catalog, ready to shop, without retyping the
     password they just chose. A link to confirm their email is on its
-    way, but confirming never stands between them and checkout.
+    way, but confirming never stands between them and checkout. Nobody
+    ticked "Remember me", so the session ends when the browser closes.
     """
 
     form_class = SignupForm
@@ -54,13 +55,23 @@ class SignupView(SuccessMessageMixin, CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
         login(self.request, self.object)
+        self.request.session.set_expiry(0)
         send_verification_email(self.request, self.object)
         return response
 
 
 class SignInView(LoginView):
+    """Sign in by username. Without "Remember me" the session ends when
+    the browser closes; with it, it lasts the standard two weeks."""
+
     template_name = "accounts/login.html"
     authentication_form = SignInForm
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # 0 = until the browser closes; None = SESSION_COOKIE_AGE.
+        self.request.session.set_expiry(None if form.cleaned_data["remember_me"] else 0)
+        return response
 
 
 class SignOutView(LogoutView):
@@ -88,10 +99,15 @@ class ResendVerificationView(LoginRequiredMixin, View):
             messages.info(request, "Your email is already confirmed.")
         elif not user.email:
             messages.error(request, "There's no email on your account to confirm.")
-        else:
-            send_verification_email(request, user)
+        elif send_verification_email(request, user):
             messages.success(
                 request, f"We sent a new confirmation link to {user.email}."
+            )
+        else:
+            messages.warning(
+                request,
+                "We've sent several confirmation links recently. Check your "
+                "inbox and spam folder, or try again in an hour.",
             )
         return redirect("accounts:account")
 
@@ -213,12 +229,13 @@ class EmailChangeView(LoginRequiredMixin, FormView):
         user = self.request.user
         old_email = user.email
         user.change_email(form.cleaned_data["email"])
-        send_verification_email(self.request, user)
+        sent = send_verification_email(self.request, user)
         send_email_changed_email(user, old_email)
-        messages.success(
-            self.request,
-            f"Your email is now {user.email}. We sent a link there to confirm it.",
-        )
+        if sent:
+            follow_up = "We sent a link there to confirm it."
+        else:
+            follow_up = "You can ask for a confirmation link from this page later."
+        messages.success(self.request, f"Your email is now {user.email}. {follow_up}")
         return super().form_valid(form)
 
 

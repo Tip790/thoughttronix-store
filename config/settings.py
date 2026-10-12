@@ -101,6 +101,22 @@ LOGIN_REDIRECT_URL = "products:catalog"
 
 LOGOUT_REDIRECT_URL = "products:catalog"
 
+# A sign-in without "Remember me" ends when the browser closes; with it,
+# the session lasts Django's standard SESSION_COOKIE_AGE (two weeks).
+
+# Throttling (accounts/throttle.py), counted in the default local-memory
+# cache. Sign-in is refused after this many failures for one username or
+# from one IP within the window...
+SIGN_IN_THROTTLE_LIMIT = env.int("SIGN_IN_THROTTLE_LIMIT", default=5)
+
+SIGN_IN_THROTTLE_WINDOW = env.int("SIGN_IN_THROTTLE_WINDOW", default=15 * 60)
+
+# ...and one address gets at most this many reset links, and this many
+# confirmation links, within the window.
+EMAIL_THROTTLE_LIMIT = env.int("EMAIL_THROTTLE_LIMIT", default=3)
+
+EMAIL_THROTTLE_WINDOW = env.int("EMAIL_THROTTLE_WINDOW", default=60 * 60)
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",

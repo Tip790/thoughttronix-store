@@ -7,6 +7,7 @@ from django.contrib.auth.forms import (
     UserCreationForm,
 )
 
+from . import throttle
 from .models import Address, User
 
 
@@ -41,12 +42,46 @@ class SignupForm(UserCreationForm):
 
 
 class SignInForm(AuthenticationForm):
-    """The stock authentication form, dressed in DaisyUI."""
+    """The stock authentication form, dressed in DaisyUI, plus "Remember
+    me" and a throttle on wrong passwords.
+
+    Too many recent failures for the username, or from the visitor's IP,
+    refuse sign-in before the password is even checked — so the right
+    password doesn't get through either until the window passes.
+    """
+
+    remember_me = forms.BooleanField(label="Remember me", required=False)
+
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        "throttled": "Too many sign-in attempts — try again later.",
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs["class"] = "input w-full"
+        for name in ("username", "password"):
+            self.fields[name].widget.attrs["class"] = "input w-full"
+        self.fields["remember_me"].widget.attrs["class"] = "checkbox"
+
+    def clean(self):
+        username = self.cleaned_data.get("username")
+        if username is None or not self.cleaned_data.get("password"):
+            return super().clean()
+        # REMOTE_ADDR is the direct peer; behind a proxy every visitor
+        # would share the proxy's IP.
+        ip = self.request.META.get("REMOTE_ADDR") if self.request else None
+        if throttle.sign_in_blocked(username, ip):
+            raise forms.ValidationError(
+                self.error_messages["throttled"], code="throttled"
+            )
+        try:
+            cleaned_data = super().clean()
+        except forms.ValidationError as error:
+            if error.code == "invalid_login":
+                throttle.record_sign_in_failure(username, ip)
+            raise
+        throttle.clear_sign_in_failures(username)
+        return cleaned_data
 
 
 class PasswordResetRequestForm(PasswordResetForm):
@@ -54,12 +89,33 @@ class PasswordResetRequestForm(PasswordResetForm):
 
     Django's form already keeps quiet about unknown emails, matches
     emails ignoring case, and only mails active accounts with a usable
-    password — verified or not.
+    password — verified or not. On top of that, each address gets only a
+    few links an hour; past that, nothing is sent, but the page looks
+    just the same.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["email"].widget.attrs["class"] = "input w-full"
+
+    def send_mail(
+        self,
+        subject_template_name,
+        email_template_name,
+        context,
+        from_email,
+        to_email,
+        html_email_template_name=None,
+    ):
+        if throttle.allow_email("reset", to_email):
+            super().send_mail(
+                subject_template_name,
+                email_template_name,
+                context,
+                from_email,
+                to_email,
+                html_email_template_name=html_email_template_name,
+            )
 
 
 class NewPasswordForm(SetPasswordForm):

@@ -19,8 +19,15 @@
 
           {% for field in form %}
             <div>
-              <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
-              {{ field }}
+              {% if field.widget_type == "checkbox" %}
+                <label class="label cursor-pointer gap-2" for="{{ field.id_for_label }}">
+                  {{ field }}
+                  <span>{{ field.label }}</span>
+                </label>
+              {% else %}
+                <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+              {% endif %}
               {% for error in field.errors %}
                 <p class="mt-1 text-sm text-error">{{ error }}</p>
               {% endfor %}
