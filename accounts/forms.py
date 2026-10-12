@@ -1,5 +1,10 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
 
 from .models import Address, User
 
@@ -36,6 +41,28 @@ class SignupForm(UserCreationForm):
 
 class SignInForm(AuthenticationForm):
     """The stock authentication form, dressed in DaisyUI."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+
+class PasswordResetRequestForm(PasswordResetForm):
+    """The stock "email me a reset link" form, dressed in DaisyUI.
+
+    Django's form already keeps quiet about unknown emails, matches
+    emails ignoring case, and only mails active accounts with a usable
+    password — verified or not.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].widget.attrs["class"] = "input w-full"
+
+
+class NewPasswordForm(SetPasswordForm):
+    """The stock "choose a new password" form, dressed in DaisyUI."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

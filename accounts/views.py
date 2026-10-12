@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.messages.views import SuccessMessageMixin
@@ -15,8 +16,14 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .emails import send_verification_email
-from .forms import AddressForm, SignInForm, SignupForm
+from .emails import send_password_changed_email, send_verification_email
+from .forms import (
+    AddressForm,
+    NewPasswordForm,
+    PasswordResetRequestForm,
+    SignInForm,
+    SignupForm,
+)
 from .models import Address
 from .tokens import user_for_verification_token
 
@@ -108,6 +115,52 @@ class VerifyEmailView(TemplateView):
         if request.user == self.verified_user:
             return redirect("accounts:account")
         return redirect("products:catalog")
+
+
+# --- Forgotten passwords -----------------------------------------------------
+
+
+class PasswordResetRequestView(auth_views.PasswordResetView):
+    """Ask for a reset link by email.
+
+    Known or unknown, every email lands on the same "check your inbox"
+    page, so the form can't be used to learn who shops here.
+    """
+
+    form_class = PasswordResetRequestForm
+    template_name = "accounts/password_reset_form.html"
+    subject_template_name = "accounts/email/password_reset_subject.txt"
+    email_template_name = "accounts/email/password_reset.txt"
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+
+class PasswordResetDoneView(auth_views.PasswordResetDoneView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class PasswordResetConfirmView(auth_views.PasswordResetConfirmView):
+    """The target of the emailed link: choose a new password.
+
+    The link works once — the new password retires its token — and
+    proves the customer reads this inbox, so it confirms the email too.
+    There's no auto-login: they sign in with the new password, which
+    shows it works.
+    """
+
+    form_class = NewPasswordForm
+    template_name = "accounts/password_reset_confirm.html"
+    success_url = reverse_lazy("accounts:login")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        user = form.user
+        user.email_verified = True
+        user.save(update_fields=["email_verified"])
+        send_password_changed_email(self.request, user)
+        messages.success(
+            self.request, "Your password has been reset. Sign in with your new one."
+        )
+        return response
 
 
 # --- The address book --------------------------------------------------------

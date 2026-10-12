@@ -28,6 +28,70 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 3: forgot password
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 3."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "how to find terminal email in code?"
+4. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 3 of `plans/account-security.md`.
+  - Three subclasses of Django's reset views in `accounts/views.py`:
+    request (`/accounts/password/reset/`), done (`.../reset/sent/`) and
+    confirm (`.../reset/<uidb64>/<token>/`). The forms in
+    `accounts/forms.py` are Django's `PasswordResetForm` and
+    `SetPasswordForm` with DaisyUI classes added.
+  - Django's form already ignores capitalization, emails only active
+    accounts with a usable password, verified or not, and stays silent
+    about unknown emails. The done page always shows the same neutral
+    message plus the spam-folder / check-your-email tip.
+  - A completed reset sets `email_verified`, sends a new "your password
+    was changed" notice (`send_password_changed_email` in
+    `accounts/emails.py`, ready for phase 4 to reuse), flashes a message,
+    and redirects to sign-in with no auto-login.
+  - The sign-in page has a "Forgot your password?" link. Three new pages
+    plus two plain-text email template pairs went under
+    `templates/accounts/`.
+  - `accounts/test_password_reset.py` adds 18 tests. 358 tests passed,
+    `ruff check` and `ruff format` clean. Nothing was committed.
+
+  Prompt 2 got a browser checklist, with a warning that the steps change
+  the committed `db.sqlite3` and that `git restore db.sqlite3` puts it
+  back. Prompt 3 got a map of the email path, from `EMAIL_BACKEND` and
+  `accounts/mail.py` to each send call and template.
+- **Deviations:** the user didn't override any recommendation and asked
+  two follow-up questions (prompts 2 and 3). The agent made one call the
+  plan doesn't settle. The PRD lists a "reset complete" URL but also says
+  a reset redirects to sign-in, so the agent followed the redirect and
+  left out the complete page. It reported this and offered to add the
+  page. For the "seeded `customer` can reset right after `seed`"
+  criterion, the agent didn't run the destructive `seed`. It checked the
+  committed database without changing it (the customer is eligible for a
+  reset email), and a test runs the flow for a confirmed customer.
+- **Sideways:**
+  - The "known and unknown emails get identical responses" test first
+    failed: the two pages differed only in the masked CSRF token that
+    `base.html` renders, which Django changes on every response. The test
+    now blanks the token before comparing.
+  - The agent first rendered password help text after the errors with
+    `|safe`. It changed this to match `signup.html` before running the
+    suite.
+  - The agent never clicked through the pages in a browser. Tests check
+    the rendered HTML and the emails only.
+  - Writing this log entry, the first edit missed its anchor because the
+    indentation was wrong, and the agent retried it.
+
 ## 2026-10-11 — Account security phase 2: email confirmation and the Account page
 
 ### Prompts

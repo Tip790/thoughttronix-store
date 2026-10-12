@@ -28,3 +28,14 @@ def send_verification_email(request, user):
         user.email,
         {"user": user, "verify_url": request.build_absolute_uri(path)},
     )
+
+
+def send_password_changed_email(request, user):
+    """Tell ``user`` their password just changed, with a way back in if
+    it wasn't them."""
+    path = reverse("accounts:password_reset")
+    send_account_email(
+        "password_changed",
+        user.email,
+        {"user": user, "reset_url": request.build_absolute_uri(path)},
+    )
