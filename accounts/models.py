@@ -74,6 +74,9 @@ class User(AbstractUser):
 
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
+    # Drives the Account page's "confirmed" badge only — an unconfirmed
+    # email never blocks signing in, the cart, or checkout.
+    email_verified = models.BooleanField(default=False)
 
     class Meta(AbstractUser.Meta):
         constraints = [

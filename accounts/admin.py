@@ -15,7 +15,7 @@ class AddressInline(admin.StackedInline):
 class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         *DjangoUserAdmin.fieldsets,
-        ("ThoughtTronix", {"fields": ("job_title",)}),
+        ("ThoughtTronix", {"fields": ("job_title", "email_verified")}),
     )
-    list_display = ("username", "email", "job_title", "is_staff")
+    list_display = ("username", "email", "email_verified", "job_title", "is_staff")
     inlines = [AddressInline]

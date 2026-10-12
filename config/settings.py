@@ -156,6 +156,26 @@ TAILWIND_CLI_VERSION = "2.9.2"
 TAILWIND_CLI_SRC_CSS = "assets/css/source.css"
 
 
-# Email — console backend only; real mail is out of scope for the core.
+# Email — verification links and security notices. With no .env, every
+# message prints to the terminal running the dev server, links included
+# (unwrapped, so they can be copied — see accounts/mail.py). For real
+# mail, set EMAIL_BACKEND to django.core.mail.backends.smtp.EmailBackend
+# and fill in the SMTP details.
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="accounts.mail.ConsoleEmailBackend")
+
+EMAIL_HOST = env.str("EMAIL_HOST", default="localhost")
+
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+
+DEFAULT_FROM_EMAIL = env.str(
+    "DEFAULT_FROM_EMAIL", default="ThoughtTronix <no-reply@thoughttronix.example>"
+)

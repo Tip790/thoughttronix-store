@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Your Account — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold">Your Account</h1>
+  <p class="mt-1 opacity-70">Your sign-in details. We guard them like our own.</p>
+
+  <div class="mt-6 grid gap-4 sm:grid-cols-2">
+    <section class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h2 class="card-title">Profile</h2>
+        <dl class="space-y-2">
+          <div>
+            <dt class="text-sm opacity-70">Username</dt>
+            <dd class="font-semibold">{{ user.username }}</dd>
+          </div>
+          {% if user.get_full_name %}
+            <div>
+              <dt class="text-sm opacity-70">Name</dt>
+              <dd class="font-semibold">{{ user.get_full_name }}</dd>
+            </div>
+          {% endif %}
+        </dl>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h2 class="card-title">Email</h2>
+        {% if user.email %}
+          <p class="font-semibold break-all">{{ user.email }}</p>
+          {% if user.email_verified %}
+            <div><span class="badge badge-success">Confirmed</span></div>
+          {% else %}
+            <div><span class="badge badge-warning">Not confirmed</span></div>
+            <p class="text-sm opacity-70">
+              Check your inbox for the confirmation link. Lost it, or did it expire?
+            </p>
+            <form method="post" action="{% url 'accounts:resend_verification' %}" class="card-actions">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary btn-sm">Resend confirmation link</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <div><span class="badge badge-warning">No email on file</span></div>
+          <p class="text-sm opacity-70">
+            Without an email, we can't help you recover your account.
+          </p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+{% endblock %}

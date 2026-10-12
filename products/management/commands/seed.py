@@ -649,6 +649,8 @@ class Command(BaseCommand):
                 is_staff=staff,
                 is_superuser=superuser,
                 job_title=job,
+                # Confirmed, so password reset works right after seeding.
+                email_verified=True,
             )
             user.set_password(password)
             user.save()
@@ -659,6 +661,7 @@ class Command(BaseCommand):
                 email=f"{username}@example.com",
                 first_name=first,
                 last_name=last,
+                email_verified=True,
             )
             user.set_unusable_password()
             user.save()

@@ -1,0 +1,17 @@
+{% autoescape off %}Hi {{ user.username }},
+
+Please confirm that {{ user.email }} is your email address by opening this link:
+
+{{ verify_url }}
+
+The link works for 3 days. If it expires, you can send yourself a new one
+from your Account page.
+
+You can keep shopping in the meantime. Confirming just helps us reach you
+if you ever need to recover your account.
+
+If you didn't create a ThoughtTronix account, you can ignore this email.
+
+— The ThoughtTronix Store
+Your Thoughts, Our Business.
+{% endautoescape %}

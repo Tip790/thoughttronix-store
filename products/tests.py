@@ -219,6 +219,8 @@ def test_seed_builds_the_demo_world(db):
     assert not customer.is_staff
     assert customer.cart.item_count() == 4
     assert customer.orders.count() == 4
+    # Every seeded email is confirmed, so password reset works at once.
+    assert not User.objects.filter(email_verified=False).exists()
 
     mark_one = Product.objects.get(slug="soulsear-mark-i")
     assert not mark_one.is_available

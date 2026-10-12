@@ -28,6 +28,93 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 2: email confirmation and the Account page
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 2."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "how do I find the link in the terminal?"
+4. "I am not seeing the accounts/email/verify, it is returning a 404 error"
+5. "http://127.0.0.1:8000/accounts/email/verify/ does not return anything"
+   — the agent then tried to run a shell command that would print working
+   confirmation links for the unconfirmed users in the database. The user
+   rejected the tool call and interrupted.
+6. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 2 of `plans/account-security.md`.
+  - `User.email_verified` (default false), migration
+    `accounts/migrations/0004_user_email_verified.py`, shown in the admin's
+    fieldsets and list.
+  - Email settings read from `.env` via environs (`EMAIL_BACKEND`, SMTP
+    host/port/user/password/TLS/SSL, `DEFAULT_FROM_EMAIL`), documented in
+    `.env.example`.
+  - `accounts/tokens.py`: signed tokens carrying the user's pk and email,
+    expiring after `PASSWORD_RESET_TIMEOUT`, refused once the email changes.
+  - `accounts/emails.py` sends plain-text emails rendered from
+    `templates/accounts/email/`; sign-up sends one confirmation email and
+    its success message names the address.
+  - The Account page (`/accounts/`, linked from the navbar after
+    Addresses) shows the email with a Confirmed / Not confirmed badge and a
+    POST-only resend button while unconfirmed.
+  - The verify link (`/accounts/email/verify/<token>/`) shows a page whose
+    button POSTs the confirmation, signed in or not.
+  - `seed` marks every seeded user verified; the seed test in
+    `products/tests.py` checks it.
+  - `accounts/test_verification.py` covers the phase's acceptance
+    criteria. 341 tests passed, `ruff check` and `ruff format` clean,
+    `manage.py check` clean. Nothing was committed.
+
+  Prompts 2–5 got a browser checklist, directions for finding the link in
+  the server's terminal, and two answers explaining that the bare
+  `/accounts/email/verify/` URL 404s by design — only the full link with
+  its token is a page.
+- **Deviations:** the agent made two decisions the plan doesn't spell out,
+  both reported at the end of the build.
+  - Opening the link doesn't confirm; a button on the page POSTs it, to
+    honor "every state change is a POST" and resist link-prefetching mail
+    scanners.
+  - A new default email backend, `accounts/mail.py`, subclasses Django's
+    console backend (see Sideways for why).
+
+  The user asked four follow-up questions (prompts 2–5) and rejected one
+  tool call (prompt 5). No corrections to the build itself.
+- **Sideways:**
+  - The agent ran `migrate` on the committed `db.sqlite3` without asking,
+    although the phase 1 session had deliberately left that grading
+    snapshot to the user. It turned out phase 1's `0003` constraint had
+    never been applied there; both `0003` and `0004` applied cleanly. The
+    agent reported this but did not run `seed`, so the committed demo users
+    stay unconfirmed until the user runs it.
+  - A console smoke test first failed with `DisallowedHost`
+    (`RequestFactory` defaults to `testserver`); rerun with a valid host.
+  - The smoke test then showed the link quoted-printable encoded — chopped
+    into `=`-terminated pieces that couldn't be copied from the terminal.
+    Swapping the template's em dash for ASCII didn't help, because Python's
+    78-character line limit alone triggers it. The fix was
+    `accounts/mail.py`, which renders with the 998-character RFC limit; a
+    test pins it.
+  - One new test expected `can&#x27;t be used`, but the apostrophe is
+    literal template text; the suite caught it. A test appended through a
+    Python heredoc came out with real newlines inside an f-string and
+    failed to parse; fixed by hand.
+  - The user kept getting a 404 at the bare `/accounts/email/verify/`. The
+    agent probed the user's running dev server with `curl` to show the
+    route worked with a token, and explained twice; the confusion wasn't
+    resolved this session. Its attempt to print working links straight
+    from the database was rejected.
+  - The agent never clicked through the pages in a browser; tests check
+    the rendered HTML only.
+
 ## 2026-10-11 — Account security phase 1: sign-up takes an email, then signs you in
 
 ### Prompts

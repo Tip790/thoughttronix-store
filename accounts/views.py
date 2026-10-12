@@ -7,27 +7,40 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
+from .emails import send_verification_email
 from .forms import AddressForm, SignInForm, SignupForm
 from .models import Address
+from .tokens import user_for_verification_token
 
 
 class SignupView(SuccessMessageMixin, CreateView):
     """Create a customer account and sign the new customer straight in.
 
     They land on the catalog, ready to shop, without retyping the
-    password they just chose.
+    password they just chose. A link to confirm their email is on its
+    way, but confirming never stands between them and checkout.
     """
 
     form_class = SignupForm
     template_name = "accounts/signup.html"
     success_url = reverse_lazy("products:catalog")
-    success_message = "Welcome to ThoughtTronix — your account is ready."
+    success_message = (
+        "Welcome to ThoughtTronix — your account is ready. We sent a link "
+        "to %(email)s to confirm your email address."
+    )
 
     def form_valid(self, form):
         response = super().form_valid(form)
         login(self.request, self.object)
+        send_verification_email(self.request, self.object)
         return response
 
 
@@ -43,6 +56,58 @@ class SignOutView(LogoutView):
         response = super().post(request, *args, **kwargs)
         messages.info(request, "You have signed out.")
         return response
+
+
+# --- The Account page and email confirmation ---------------------------------
+
+
+class AccountView(LoginRequiredMixin, TemplateView):
+    template_name = "accounts/account.html"
+
+
+class ResendVerificationView(LoginRequiredMixin, View):
+    """POST-only: email the signed-in user a fresh confirmation link."""
+
+    def post(self, request):
+        user = request.user
+        if user.email_verified:
+            messages.info(request, "Your email is already confirmed.")
+        elif not user.email:
+            messages.error(request, "There's no email on your account to confirm.")
+        else:
+            send_verification_email(request, user)
+            messages.success(
+                request, f"We sent a new confirmation link to {user.email}."
+            )
+        return redirect("accounts:account")
+
+
+class VerifyEmailView(TemplateView):
+    """The target of the emailed link; works signed in or not.
+
+    GET only shows the page, and its button POSTs the confirmation, so a
+    mail scanner that pre-fetches links can't confirm on the customer's
+    behalf — every state change here is a POST.
+    """
+
+    template_name = "accounts/verify_email.html"
+
+    def dispatch(self, request, *args, token, **kwargs):
+        self.verified_user = user_for_verification_token(token)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(verified_user=self.verified_user, **kwargs)
+
+    def post(self, request):
+        if self.verified_user is None:
+            return self.get(request)
+        self.verified_user.email_verified = True
+        self.verified_user.save(update_fields=["email_verified"])
+        messages.success(request, f"Thanks — {self.verified_user.email} is confirmed.")
+        if request.user == self.verified_user:
+            return redirect("accounts:account")
+        return redirect("products:catalog")
 
 
 # --- The address book --------------------------------------------------------

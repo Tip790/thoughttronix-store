@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm your email — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-sm">
+    <div class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h1 class="text-3xl font-bold">Confirm your email</h1>
+        {% if verified_user %}
+          <p class="opacity-70">One click and we'll know where to find you.</p>
+          {% if verified_user.email_verified %}
+            <div class="alert alert-success mt-4" role="alert">
+              <span>{{ verified_user.email }} is already confirmed.</span>
+            </div>
+          {% else %}
+            <p class="mt-4">Confirm <span class="font-semibold break-all">{{ verified_user.email }}</span> as the email for your account.</p>
+            <form method="post" class="mt-4">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary w-full">Confirm my email</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <p class="opacity-70">This link can't be used.</p>
+          <div class="alert alert-error mt-4" role="alert">
+            <span>
+              The link has expired, was copied incompletely, or was sent to an
+              email this account no longer uses.
+            </span>
+          </div>
+          {% if user.is_authenticated %}
+            <a href="{% url 'accounts:account' %}" class="btn btn-outline mt-4 w-full">
+              Get a new link from your Account page
+            </a>
+          {% else %}
+            <a href="{% url 'accounts:login' %}" class="btn btn-outline mt-4 w-full">
+              Sign in to send a new link
+            </a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
