@@ -11,14 +11,21 @@ from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
 )
 
-from .emails import send_password_changed_email, send_verification_email
+from .emails import (
+    send_email_changed_email,
+    send_password_changed_email,
+    send_verification_email,
+)
 from .forms import (
     AddressForm,
+    ChangeEmailForm,
+    ChangePasswordForm,
     NewPasswordForm,
     PasswordResetRequestForm,
     SignInForm,
@@ -161,6 +168,58 @@ class PasswordResetConfirmView(auth_views.PasswordResetConfirmView):
             self.request, "Your password has been reset. Sign in with your new one."
         )
         return response
+
+
+# --- Changing the password and the email ------------------------------------
+
+
+class PasswordChangeView(auth_views.PasswordChangeView):
+    """Swap the current password for a new one.
+
+    Django re-stamps this session with the new password's hash, so this
+    device stays signed in while every other session signed in as the
+    user is signed out.
+    """
+
+    form_class = ChangePasswordForm
+    template_name = "accounts/password_change_form.html"
+    success_url = reverse_lazy("accounts:password_change_done")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        send_password_changed_email(self.request, form.user)
+        return response
+
+
+class PasswordChangeDoneView(auth_views.PasswordChangeDoneView):
+    template_name = "accounts/password_change_done.html"
+
+
+class EmailChangeView(LoginRequiredMixin, FormView):
+    """Move the account to a new email, confirmed with the password.
+
+    The new address starts unconfirmed and gets a fresh link; the old one
+    is told about the change, in case it wasn't the owner who made it.
+    """
+
+    form_class = ChangeEmailForm
+    template_name = "accounts/email_change_form.html"
+    success_url = reverse_lazy("accounts:account")
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        user = self.request.user
+        old_email = user.email
+        user.change_email(form.cleaned_data["email"])
+        send_verification_email(self.request, user)
+        send_email_changed_email(user, old_email)
+        messages.success(
+            self.request,
+            f"Your email is now {user.email}. We sent a link there to confirm it.",
+        )
+        return super().form_valid(form)
 
 
 # --- The address book --------------------------------------------------------

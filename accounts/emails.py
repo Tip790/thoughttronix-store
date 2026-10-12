@@ -13,7 +13,13 @@ from .tokens import make_verification_token
 
 
 def send_account_email(name, to, context):
-    """Render the ``name`` template pair with ``context`` and send it to ``to``."""
+    """Render the ``name`` template pair with ``context`` and send it to ``to``.
+
+    Users made before sign-up required an email may have none; there's
+    nobody to tell, so nothing is sent.
+    """
+    if not to:
+        return
     subject = render_to_string(f"accounts/email/{name}_subject.txt", context)
     body = render_to_string(f"accounts/email/{name}.txt", context)
     # A subject must be one line; templates end with a newline.
@@ -38,4 +44,16 @@ def send_password_changed_email(request, user):
         "password_changed",
         user.email,
         {"user": user, "reset_url": request.build_absolute_uri(path)},
+    )
+
+
+def send_email_changed_email(user, old_email):
+    """Tell ``old_email`` that ``user``'s email moved away from it, so the
+    real owner hears about a hijack at the address they still read.
+
+    There's no reset link here: reset links now go to the new address,
+    so one would only help whoever made the change.
+    """
+    send_account_email(
+        "email_changed", old_email, {"user": user, "old_email": old_email}
     )

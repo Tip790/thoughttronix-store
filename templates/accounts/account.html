@@ -48,6 +48,24 @@
             Without an email, we can't help you recover your account.
           </p>
         {% endif %}
+        <div class="card-actions mt-2">
+          <a href="{% url 'accounts:email_change' %}" class="btn btn-outline btn-sm">
+            {% if user.email %}Change email{% else %}Add an email{% endif %}
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-md sm:col-span-2">
+      <div class="card-body">
+        <h2 class="card-title">Password</h2>
+        <p class="text-sm opacity-70">
+          Think it's leaked? Change it, and every other device signed in as
+          you is signed out.
+        </p>
+        <div class="card-actions">
+          <a href="{% url 'accounts:password_change' %}" class="btn btn-outline btn-sm">Change password</a>
+        </div>
       </div>
     </section>
   </div>

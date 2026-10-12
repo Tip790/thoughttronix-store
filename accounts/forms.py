@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
+    PasswordChangeForm,
     PasswordResetForm,
     SetPasswordForm,
     UserCreationForm,
@@ -68,6 +69,56 @@ class NewPasswordForm(SetPasswordForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+
+class ChangePasswordForm(PasswordChangeForm):
+    """The stock "current password, then a new one twice" form, dressed
+    in DaisyUI. The new password runs through the usual validators."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+
+class ChangeEmailForm(forms.Form):
+    """A new email, confirmed with the current password.
+
+    The password check means someone who borrowed a signed-in session
+    can't redirect the account's recovery email to themselves. Like
+    sign-up, a new email must not belong to another account in any
+    capitalization.
+    """
+
+    email = forms.EmailField(label="New email")
+    password = forms.CharField(
+        label="Current password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        self.fields["email"].widget.attrs["autocomplete"] = "email"
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].lower()
+        if email == self.user.email:
+            raise forms.ValidationError("That's already the email on your account.")
+        if User.objects.filter(email__iexact=email).exclude(pk=self.user.pk).exists():
+            raise forms.ValidationError("That email is already in use.")
+        return email
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "Your current password was entered incorrectly. Please try again."
+            )
+        return password
 
 
 class AddressForm(forms.ModelForm):

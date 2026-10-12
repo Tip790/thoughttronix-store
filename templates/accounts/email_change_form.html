@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Change your email — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-sm">
+    <div class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h1 class="text-3xl font-bold">Change your email</h1>
+        <p class="opacity-70">We'll send a confirmation link to the new address.</p>
+
+        {% if user.email %}
+          <p class="mt-2 text-sm">
+            Currently <span class="font-semibold break-all">{{ user.email }}</span>.
+            We'll let that address know about the change.
+          </p>
+        {% endif %}
+
+        <form method="post" action="{% url 'accounts:email_change' %}" class="mt-4 space-y-4">
+          {% csrf_token %}
+
+          {% for error in form.non_field_errors %}
+            <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+          {% endfor %}
+
+          {% for field in form %}
+            <div>
+              <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% for error in field.errors %}
+                <p class="mt-1 text-sm text-error">{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endfor %}
+
+          <button type="submit" class="btn btn-primary w-full">Change email</button>
+        </form>
+
+        <a href="{% url 'accounts:account' %}" class="btn btn-ghost mt-2 w-full">Back to your account</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

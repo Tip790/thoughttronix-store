@@ -98,6 +98,16 @@ class User(AbstractUser):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
 
+    def change_email(self, email):
+        """Switch to ``email``, which starts out unconfirmed.
+
+        Every confirmation link sent to the old address goes stale with
+        it, since a link only works for the email it was sent to.
+        """
+        self.email = email
+        self.email_verified = False
+        self.save(update_fields=["email", "email_verified"])
+
 
 class AddressManager(models.Manager):
     def default_for(self, user, role):

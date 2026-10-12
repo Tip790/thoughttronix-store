@@ -28,6 +28,72 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security phase 4: change password and change email
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 4."
+   (sent right after `/clear`, so the session started with no earlier
+   context)
+2. "How can I manually verify this phase in the browser?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+### Summary
+
+- **Outcome:** the agent built phase 4 of `plans/account-security.md`.
+  - **Password change:** subclasses of Django's `PasswordChangeView` and
+    `PasswordChangeDoneView` in `accounts/views.py`
+    (`/accounts/password/change/` and `.../change/done/`). The form is
+    `ChangePasswordForm`, which is Django's `PasswordChangeForm` with
+    DaisyUI classes. The current session is kept and other sessions are
+    signed out. The view reuses phase 3's `send_password_changed_email`.
+  - **Email change:** a new `ChangeEmailForm` (new email plus current
+    password) and `EmailChangeView` (`/accounts/email/change/`). The
+    switch itself is a new `User.change_email()` model method that saves
+    the email and marks it unconfirmed. The view then sends a
+    confirmation link to the new address and a new "email changed"
+    notice (`send_email_changed_email`, plus a template pair) to the old
+    one.
+  - **Account page:** the Email card gained a Change email / Add an
+    email button, and a new Password card links to the password form.
+    Three new pages went under `templates/accounts/`.
+  - **Tests:** `accounts/test_account_changes.py` adds 20 tests. 378
+    tests passed, and `ruff check` and `ruff format` were clean. Nothing
+    was committed.
+
+  Prompt 2 got a browser checklist covering the seeded `customer` and
+  `employee` accounts, the two-session sign-out check (a private window
+  as the second device), the email-change errors, and the two printed
+  emails. It ended with `git restore db.sqlite3`.
+- **Deviations:** the user didn't override any recommendation and asked
+  one follow-up question (prompt 2). The agent made four choices the
+  plan doesn't settle, and reported them:
+  - The "email changed" notice has no reset link, since reset links now
+    go to the new address. It tells the owner to contact support
+    instead, though the store has no real support address.
+  - The notice names the new address.
+  - `send_account_email` now silently skips accounts with no email.
+  - Re-entering the current email is refused.
+- **Sideways:**
+  - `ruff format` flagged the new test file, which was then formatted.
+  - The phase report said 21 new tests. The real count is 20 (358 → 378),
+    caught while writing this log.
+  - Step 6 of the browser checklist was wrong. It said to press "Resend
+    confirmation link" before changing the email to get an old link, but
+    the seeded customer is already confirmed, so that button isn't
+    shown. To see an old link go stale, change the email twice and open
+    the first change's link.
+  - The checklist took the seeded customer's password to be
+    `customer123` from the PRD and test fixtures, without checking the
+    `seed` command.
+  - Nothing was checked in a browser. Tests confirm the behavior and the
+    rendered HTML only.
+
 ## 2026-10-11 — Account security phase 3: forgot password
 
 ### Prompts
