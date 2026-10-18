@@ -1,0 +1,28 @@
+{# The Save control, in all its states. Its saved state comes from the #}
+{# wishlists context processor's wishlist_product_ids. Never btn-primary: #}
+{# the page's primary action stays add-to-cart. #}
+{% if user.is_authenticated %}
+  {% if product.pk in wishlist_product_ids %}
+    <button
+      hx-post="{% url 'wishlists:remove' product.pk %}"
+      hx-swap="outerHTML"
+      aria-pressed="true"
+      class="btn btn-outline btn-sm">
+      <span class="text-error" aria-hidden="true">♥</span> Saved
+    </button>
+  {% else %}
+    <button
+      hx-post="{% url 'wishlists:add' product.pk %}"
+      hx-swap="outerHTML"
+      aria-pressed="false"
+      class="btn btn-ghost btn-sm">
+      <span aria-hidden="true">♡</span> Save
+    </button>
+  {% endif %}
+{% else %}
+  {# Signed-out visitors are prompted to sign in — a plain link, no HTMX. #}
+  <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}"
+     class="btn btn-ghost btn-sm">
+    <span aria-hidden="true">♡</span> Save
+  </a>
+{% endif %}

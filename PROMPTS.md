@@ -28,6 +28,213 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 1 built: save from the product detail page
+
+### Prompts
+
+1. "@prd/wishlist.md @plans/wishlist.md Implement phase 1"
+2. "How can I manually verify this phase in the browser?"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+(`/clear` was run at the start of the session. It is a Claude Code
+command, not a prompt to the agent, so it isn't numbered.)
+
+### Summary
+
+- **Outcome:** Phase 1 of `plans/wishlist.md` is built. All 456 tests
+  pass, 30 of them new in `wishlists/tests.py`, and ruff check and ruff
+  format are clean.
+  - A new `wishlists` app holds `Wishlist` and `WishlistItem`, with the
+    unique constraint, migration `0001_initial` and an admin page that
+    shows a wishlist's items inline.
+  - `POST` Add and Remove endpoints share one base view. Both act only on
+    the requesting user's own wishlist and accept unavailable products.
+  - The `wishlists` context processor is registered after the `cart` one.
+  - The `_wishlist_button.html` partial sits on the detail page next to
+    add-to-cart. It has the ghost "♡ Save" and outline "♥ Saved" states,
+    `aria-pressed`, and a plain sign-in link for signed-out visitors.
+  - Running `migrate` updated the committed `db.sqlite3`.
+  - Nothing is committed yet.
+- **Design choice made without asking:** the button always reads its
+  state from the context processor's id set, rather than the views
+  passing a flag. The set is built when the response renders, after Add
+  or Remove has run, so page loads and HTMX responses use one source of
+  truth. Phase 3's badge count can use the same set. The choice was
+  explained to the user afterwards.
+- **Deviations and follow-ups:** the agent asked no questions, so no
+  recommendation was overridden. The user's one follow-up asked how to
+  check the phase by hand in the browser. The agent wrote a walkthrough
+  against the seeded demo accounts covering:
+  - the signed-out sign-in redirect
+  - saving and removing without a page reload, and the state surviving a
+    reload
+  - `aria-pressed`
+  - saving an unavailable product (EchoPatch)
+  - the stale two-tab case
+  - staff saving and the admin inline
+  - 405 and 404 checks
+- **Sideways:**
+  - The first draft of the signed-out `next` test had a muddled assertion
+    with an `or` fallback. The agent caught it before running the suite:
+    Django's `urlencode` filter leaves `/` unescaped by default, so it
+    replaced the assertion with a single exact check.
+  - `ruff format --check` flagged `wishlists/tests.py`. The agent
+    formatted it and reran that file's tests, which passed. It didn't
+    rerun the full suite after formatting.
+  - The plan schedules the second-customer fixture for Phase 2, but
+    `other_customer` was already in `conftest.py`, so Phase 1 used it.
+  - The agent didn't run the app in a browser itself. Browser checking is
+    left to the user's walkthrough, and the walkthrough's DevTools
+    `htmx.ajax` snippet for the 404 check hasn't been tried.
+
+## 2026-10-17 — Customer wishlist PRD broken into a five-phase plan (not yet built)
+
+### Prompts
+
+1. "/prd-to-plan @prd/wishlist.md"
+2. "create the plan"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+
+(`/clear` was run at the start of the session. It is a Claude Code
+command, not a prompt to the agent, so it isn't numbered.)
+
+### Summary
+
+- **Outcome:** a new plan, `plans/wishlist.md`, breaks `prd/wishlist.md`
+  into five vertical slices:
+  1. Save from the product detail page. This is the tracer bullet: the
+     models, migration, admin, Add and Remove endpoints, button partial,
+     sign-in link and context processor.
+  2. The wishlist page, with the contents partial, empty state and
+     page-variant Remove.
+  3. The navbar link with a live, out-of-band count.
+  4. Save from catalog cards.
+  5. Account deletion, the seeded demo wishlist and the `PROMPTS.md` log.
+
+  The header records the durable decisions: the `wishlists` app and its
+  import boundary, the `Wishlist` and `WishlistItem` models with the
+  unique constraint, and the URLs `/wishlist/`, `/wishlist/add/<pk>/` and
+  `/wishlist/remove/<pk>/`, included ahead of the `products` slug routes.
+  No code was written, and the plan and PRD are not committed yet.
+- **Deviations:** the agent asked three questions:
+  - whether the granularity was right, since Phase 4 could fold into
+    Phase 1
+  - whether the badge phase should come before the page phase
+  - whether any phases should be merged or split
+
+  The user answered with "create the plan" and didn't address the
+  questions. The agent took that as approval of the breakdown as proposed,
+  and asked no further questions.
+- **Sideways:** nothing failed. The agent added two acceptance criteria
+  that aren't in the PRD and flagged them for possible removal:
+  - Phase 3: the navbar badge adds no query beyond the context
+    processor's one.
+  - Phase 4: the catalog's sign-in link keeps the search and filter
+    parameters in `next`.
+
+## 2026-10-17 — Customer wishlist, grilled and written up as a PRD (not yet built)
+
+### Prompts
+
+1. "/grill-me ThoughtTronix wants to add a customer wishlist. Each customer
+   has one wishlist, each wishlist belongs to one customer, they can add or
+   remove products from the catalog without needing to reload the page. The
+   button to add/remove item must show if an item is on a wishlist or not.
+   Customers can only access their own data, each customer can only have one
+   wishlist, and wishlists cannot have unique names."
+2. "A" (Q1: "cannot have unique names" means the wishlist has no name field
+   at all)
+3. "A" (Q2: a new `wishlists` app depending only on `products` and
+   `accounts`)
+4. "B" (Q3: an explicit `WishlistItem` with `added_at` and a unique
+   (wishlist, product) constraint)
+5. "A" (Q4: unavailable products can be saved and stay on the list with a
+   badge; deleting a product cascades)
+6. "b" (Q5: separate idempotent `POST` add and remove endpoints keyed by
+   product pk, not a toggle)
+7. "A" (Q6: signed-out visitors get a sign-in link with `?next=`;
+   `LoginRequiredMixin` as a backstop)
+8. "A" (Q7: strictly private; no back-office tab; staff have their own
+   wishlists; registered in the Django admin)
+9. "A" (Q8: `User.anonymize()` deletes the wishlist through the reverse
+   relation, with no import)
+10. "A" (Q9: a context processor supplies `wishlisted_ids` in one query per
+    page)
+11. "A" (Q10: "♡ Save" / "♥ Saved" with icon and text, ghost or outline
+    style, `aria-pressed`; shown on catalog cards, the detail page and the
+    wishlist page)
+12. "A" (Q11: removing on the wishlist page re-renders the contents partial
+    or the empty state, chosen by an `hx-vals` flag)
+13. "A" (Q12: a navbar "♥ Wishlist" link with a count badge, swapped
+    out-of-band)
+14. "A" (Q13: wishlist rows reuse the existing add-to-cart button; the item
+    stays on the wishlist)
+15. "a" (Q14: `seed` gives the demo customer a 3–4 item wishlist including
+    one unavailable product)
+16. "A" (Q15: full model, view, access-control and integration tests, with
+    a second-customer fixture)
+17. "/to-prd"
+18. "Append a session log to PROMPTS.md at the repo root, under today's
+    date, newest entry at the top. Record every prompt I gave you this
+    session, in order, including any corrections. End the entry with a
+    short summary: the outcome, any places where I deviated from a
+    recommended answer or asked follow-up questions, and anything that went
+    sideways."
+
+(`/login` was also run at the start of the session. It is a Claude Code
+command, not a prompt to the agent, so it isn't numbered.)
+
+### Summary
+
+- **Outcome:** a grilling session of 15 questions led to a new PRD,
+  `prd/wishlist.md`. No code was written, and the PRD is not committed yet.
+  The agreed design:
+  - A new `wishlists` app with a lazily created one-to-one `Wishlist` that
+    has no name.
+  - Products are stored in `WishlistItem` rows, unique per (wishlist,
+    product), ordered newest first, and cascading when a product is deleted.
+  - Any catalog product can be saved, including unavailable ones, which are
+    shown with a badge.
+  - Separate idempotent add and remove HTMX endpoints. Every lookup goes
+    through `request.user`, and no URL ever takes another user's id.
+  - A context processor supplies each button's starting state and the
+    navbar badge count.
+  - Removing on the wishlist page re-renders the list or its empty state.
+  - Wishlist rows reuse the existing add-to-cart button.
+  - No staff or back-office visibility, apart from a Django admin
+    registration.
+  - `User.anonymize()` deletes the wishlist.
+  - `seed` builds a demo wishlist.
+  - Full privacy-focused tests.
+- **Deviations:** every answer took the recommended option, and the user
+  asked no follow-up questions.
+  - Q7 also asked whether registering the model in the Django admin was OK.
+    The user answered just "A", and the agent took that as a yes.
+  - Q11 offered a separate URL as an alternative to the `hx-vals` flag. The
+    user's "A" kept the flag.
+- **Sideways:**
+  - No failures or wrong turns.
+  - While exploring for Q8, the agent found that `User.anonymize()` scrubs
+    the user rather than deleting the row. A user-to-wishlist `CASCADE`
+    would therefore never fire, and a "deleted" customer's wishlist would
+    have survived. This became a question of its own (Q8) rather than a
+    late surprise.
+  - When writing the PRD, the agent added a few items to **Out of Scope**
+    that were never discussed explicitly: notifications, notes or
+    quantities on items, manual reordering, and pagination of the wishlist
+    page. It also stated that no service module is needed. All of these
+    follow from the agreed design but were not asked.
+
 ## 2026-10-11 — Account security phase 7, continued: questions about the design
 
 ### Prompts
