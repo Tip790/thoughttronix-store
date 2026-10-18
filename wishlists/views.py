@@ -32,8 +32,9 @@ class WishlistView(LoginRequiredMixin, TemplateView):
 class WishlistActionView(LoginRequiredMixin, View):
     """Base for HTMX wishlist mutations: act, then re-render the button.
 
-    The button reads its state from the ``wishlists`` context processor,
-    which runs at render time — after the action — so it shows the new state.
+    The button and the out-of-band navbar badge read their state from the
+    ``wishlists`` context processor, which runs at render time — after the
+    action — so both show the new state.
     """
 
     def post(self, request, pk):
@@ -49,7 +50,7 @@ class WishlistActionView(LoginRequiredMixin, View):
         return render(
             self.request,
             "wishlists/partials/_wishlist_button.html",
-            {"product": product},
+            {"product": product, "oob_badge": True},
         )
 
 
@@ -70,5 +71,5 @@ class RemoveFromWishlistView(WishlistActionView):
         return render(
             self.request,
             "wishlists/partials/_wishlist_contents.html",
-            {"items": wishlist.items.select_related("product")},
+            {"items": wishlist.items.select_related("product"), "oob_badge": True},
         )

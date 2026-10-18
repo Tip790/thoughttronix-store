@@ -1,0 +1,12 @@
+{# The navbar wishlist link. Include with oob=True to swap it out-of-band #}
+{# from an HTMX response; the count is the size of the wishlists context #}
+{# processor's id set, so it costs no extra query. #}
+<a href="{% url 'wishlists:wishlist' %}"
+   id="wishlist-badge"
+   class="btn btn-ghost btn-sm indicator"
+   {% if oob %}hx-swap-oob="true"{% endif %}>
+  ♥ Wishlist
+  {% if wishlist_product_ids %}
+    <span class="badge badge-secondary badge-sm indicator-item">{{ wishlist_product_ids|length }}</span>
+  {% endif %}
+</a>

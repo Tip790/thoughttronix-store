@@ -28,6 +28,65 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 3 built with TDD: the navbar link with a live count
+
+### Prompts
+
+1. "/implement @prd/wishlist.md @plans/wishlist.md implement phase <3>"
+2. "proceed"
+3. "approve, continue"
+4. "continue to cycle 2"
+5. "approve, continue"
+6. "continue to cycle 3"
+7. "approve, continue"
+8. "continue with the rest of the phase"
+9. "it passes, continue"
+
+### Summary
+
+- **Outcome:** Phase 3 of `plans/wishlist.md` is built and committed.
+  All 473 tests pass, 7 of them new in `wishlists/tests.py`, and ruff
+  check and ruff format are clean.
+  - Three behaviors were developed test-first, each through an approved
+    RED and then GREEN:
+    1. The navbar shows "♥ Wishlist" with the right count to signed-in
+       users and nothing to signed-out visitors.
+    2. Add responds with the out-of-band badge carrying the count after
+       the add.
+    3. Remove from the wishlist page responds with exactly one
+       out-of-band badge carrying the lowered count.
+  - The new `_wishlist_badge.html` mirrors `_cart_badge.html`: an
+    `id="wishlist-badge"` link with an `oob` flag. Its count is
+    `wishlist_product_ids|length`, so it needs no query of its own, and
+    it is hidden at zero. `base.html` includes it before the cart badge.
+  - The button and contents partials include the badge when the views
+    pass `oob_badge=True`. The rows inside the contents partial pass
+    `oob_badge=False` to their includes.
+  - Ordinary tests cover:
+    - the default Remove's badge count
+    - the count hidden after the last item goes
+    - the badge rendering with zero queries
+    - no stray cart badge in the wishlist-page Remove response
+  - The user ran the eleven-step browser walkthrough and reported that it
+    passed.
+- **Deviations:** none. The user approved all three proposed behaviors
+  and every test unchanged. The agent chose `badge-secondary` for the
+  count so it reads differently from the cart's `badge-primary`, and said
+  so when presenting cycle 1's test.
+- **Sideways:**
+  - Django's `{% include %}` passes the whole context down, so
+    `oob_badge=True` on the contents response leaked into every row. The
+    agent foresaw this for the wishlist button, and cycle 3's test checks
+    for exactly one badge. It missed at first that the row's add-to-cart
+    partial reads the same flag. That showed up only after GREEN: a new
+    ordinary test failed on a stray out-of-band cart badge, and passing
+    `oob_badge=False` to that include fixed it.
+  - One command during that check only re-ran the cycle 3 test and told
+    the agent nothing new.
+  - `ruff format --check` flagged `wishlists/tests.py`, and it was
+    reformatted. Only the wishlist tests were re-run afterwards, not the
+    full suite.
+
 ## 2026-10-18 — Wishlist Phase 2 built with TDD: the wishlist page
 
 ### Prompts

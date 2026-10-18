@@ -2,6 +2,7 @@
 {# wishlists context processor's wishlist_product_ids. Never btn-primary: #}
 {# the page's primary action stays add-to-cart. Include with on_wishlist_page #}
 {# on the wishlist page, where Remove re-renders #wishlist-contents instead. #}
+{# Add and Remove responses pass oob_badge for the navbar count. #}
 {% if user.is_authenticated %}
   {% if product.pk in wishlist_product_ids %}
     <button
@@ -32,3 +33,4 @@
     <span aria-hidden="true">♡</span> Save
   </a>
 {% endif %}
+{% if oob_badge %}{% include "wishlists/partials/_wishlist_badge.html" with oob=True %}{% endif %}

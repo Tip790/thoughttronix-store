@@ -4,6 +4,7 @@ from http import HTTPStatus
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
+from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.urls import reverse
 
@@ -400,6 +401,127 @@ def test_customers_never_see_each_others_wishlists(
 
     assert unavailable_product.name in page
     assert product.name not in page
+
+
+# --- The navbar badge --------------------------------------------------------
+
+
+def test_navbar_shows_the_wishlist_count_to_signed_in_users(
+    client, customer, product, unavailable_product
+):
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    assert 'id="wishlist-badge"' in page
+    assert f'href="{reverse("wishlists:wishlist")}"' in page
+    assert "♥ Wishlist" in page
+    assert (
+        '<span class="badge badge-secondary badge-sm indicator-item">2</span>' in page
+    )
+
+    client.logout()
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    assert 'id="wishlist-badge"' not in page
+
+
+def test_add_includes_the_oob_badge_with_the_new_count(
+    client, customer, product, unavailable_product
+):
+    Wishlist.for_user(customer).add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.post(add_url(product))
+
+    page = response.content.decode()
+    assert 'id="wishlist-badge"' in page
+    assert 'hx-swap-oob="true"' in page
+    assert (
+        '<span class="badge badge-secondary badge-sm indicator-item">2</span>' in page
+    )
+
+
+def test_remove_from_the_wishlist_page_includes_one_oob_badge_with_the_new_count(
+    client, customer, product, unavailable_product, category
+):
+    third = Product.objects.create(
+        name="Murmur Pillow",
+        slug="murmur-pillow",
+        price=Decimal("89.00"),
+        category=category,
+    )
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    wishlist.add(third)
+    client.force_login(customer)
+
+    response = client.post(remove_url(product), {"from": "wishlist"})
+
+    page = response.content.decode()
+    assert "<table" in page
+    assert page.count('id="wishlist-badge"') == 1
+    assert 'hx-swap-oob="true"' in page
+    assert (
+        '<span class="badge badge-secondary badge-sm indicator-item">2</span>' in page
+    )
+
+
+def test_remove_from_the_wishlist_page_leaves_the_cart_badge_alone(
+    client, customer, product, unavailable_product
+):
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.post(remove_url(unavailable_product), {"from": "wishlist"})
+
+    assert 'id="cart-badge"' not in response.content.decode()
+
+
+def test_remove_includes_the_oob_badge_with_the_new_count(
+    client, customer, product, unavailable_product
+):
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.post(remove_url(product))
+
+    page = response.content.decode()
+    assert 'aria-pressed="false"' in page
+    assert page.count('id="wishlist-badge"') == 1
+    assert (
+        '<span class="badge badge-secondary badge-sm indicator-item">1</span>' in page
+    )
+
+
+def test_removing_the_last_item_hides_the_count(client, customer, product):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    response = client.post(remove_url(product))
+
+    page = response.content.decode()
+    assert 'id="wishlist-badge"' in page
+    assert "indicator-item" not in page
+
+
+def test_rendering_the_badge_runs_no_query(customer, django_assert_num_queries):
+    context = {"user": customer, "wishlist_product_ids": {1, 2, 3}}
+
+    with django_assert_num_queries(0):
+        html = render_to_string("wishlists/partials/_wishlist_badge.html", context)
+
+    assert (
+        '<span class="badge badge-secondary badge-sm indicator-item">3</span>' in html
+    )
 
 
 # --- Context processor -------------------------------------------------------
