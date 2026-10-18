@@ -1,3 +1,4 @@
+from decimal import Decimal
 from http import HTTPStatus
 
 import pytest
@@ -5,6 +6,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
 from django.test import RequestFactory
 from django.urls import reverse
+
+from products.models import Product
 
 from .context_processors import wishlists
 from .models import Wishlist, WishlistItem
@@ -254,6 +257,149 @@ def test_detail_page_of_an_unavailable_product_offers_save(
     response = client.get(unavailable_product.get_absolute_url())
 
     assert add_url(unavailable_product) in response.content.decode()
+
+
+# --- The wishlist page -------------------------------------------------------
+
+
+def test_wishlist_page_lists_only_own_items_newest_first(
+    client, customer, other_customer, product, unavailable_product, category
+):
+    others_product = Product.objects.create(
+        name="Murmur Pillow",
+        slug="murmur-pillow",
+        price=Decimal("89.00"),
+        category=category,
+    )
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    Wishlist.for_user(other_customer).add(others_product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlists:wishlist"))
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert unavailable_product.name in page
+    assert product.name in page
+    assert page.index(unavailable_product.name) < page.index(product.name)
+    assert others_product.name not in page
+
+
+def test_remove_from_the_wishlist_page_returns_the_remaining_rows(
+    client, customer, product, unavailable_product
+):
+    wishlist = Wishlist.for_user(customer)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.post(remove_url(product), {"from": "wishlist"})
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert "<html" not in page
+    assert unavailable_product.name in page
+    assert product.name not in page
+    assert not wishlist.items.filter(product=product).exists()
+
+
+def test_removing_the_last_item_returns_the_empty_state(client, customer, product):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    response = client.post(remove_url(product), {"from": "wishlist"})
+
+    page = response.content.decode()
+    assert "Your wishlist is empty" in page
+    assert product.name not in page
+    assert "<table" not in page
+
+
+def test_wishlist_page_rows_remove_through_the_page(client, customer, product):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlists:wishlist"))
+
+    page = response.content.decode()
+    assert remove_url(product) in page
+    assert 'aria-pressed="true"' in page
+    assert 'hx-target="#wishlist-contents"' in page
+    assert """hx-vals='{"from": "wishlist"}'""" in page
+
+
+def test_wishlist_page_marks_unavailable_products(
+    client, customer, unavailable_product
+):
+    Wishlist.for_user(customer).add(unavailable_product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlists:wishlist"))
+
+    page = response.content.decode()
+    assert (
+        '<span class="badge badge-warning badge-outline ml-2">Unavailable</span>'
+        in page
+    )
+    assert (
+        '<button class="btn btn-outline btn-sm" disabled>Unavailable</button>' in page
+    )
+    assert reverse("orders:add", kwargs={"pk": unavailable_product.pk}) not in page
+
+
+def test_wishlist_page_offers_add_to_cart(client, customer, product):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlists:wishlist"))
+
+    page = response.content.decode()
+    assert reverse("orders:add", kwargs={"pk": product.pk}) in page
+    assert "Unavailable" not in page
+
+
+def test_adding_a_saved_product_to_the_cart_keeps_it_saved(client, customer, product):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    client.post(reverse("orders:add", kwargs={"pk": product.pk}))
+
+    assert customer.cart.items.filter(product=product).exists()
+    assert customer.wishlist.items.filter(product=product).exists()
+    page = client.get(reverse("wishlists:wishlist")).content.decode()
+    assert product.name in page
+
+
+def test_customer_without_a_wishlist_sees_the_empty_state(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("wishlists:wishlist"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Your wishlist is empty" in response.content.decode()
+    assert not Wishlist.objects.exists()
+
+
+def test_wishlist_page_redirects_anonymous_visitors(client):
+    response = client.get(reverse("wishlists:wishlist"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_customers_never_see_each_others_wishlists(
+    client, customer, other_customer, product, unavailable_product
+):
+    Wishlist.for_user(customer).add(product)
+    Wishlist.for_user(other_customer).add(unavailable_product)
+    client.force_login(other_customer)
+
+    page = client.get(reverse("wishlists:wishlist")).content.decode()
+
+    assert unavailable_product.name in page
+    assert product.name not in page
 
 
 # --- Context processor -------------------------------------------------------

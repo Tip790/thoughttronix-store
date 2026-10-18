@@ -28,6 +28,86 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 2 built with TDD: the wishlist page
+
+### Prompts
+
+1. "/tdd @prd/wishlist.md @plans/wishlist.md implement phase 2"
+2. "these work, continue"
+3. "continue"
+4. "continue"
+5. "continue"
+6. "continue to cycle 3"
+7. "approve, continue"
+8. "continue with the rest of the phase"
+9. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that went
+   sideways."
+10. "How can I manually verify this phase in the browser?"
+11. "add this to the Prompt.MD made this session"
+
+### Summary
+
+- **Outcome:** Phase 2 of `plans/wishlist.md` is built. All 466 tests
+  pass, 10 of them new in `wishlists/tests.py`, and ruff check and ruff
+  format are clean. Nothing is committed.
+  - Three behaviors were developed test-first, each through an approved
+    RED and then GREEN:
+    1. `/wishlist/` lists only the requesting user's items, newest first.
+    2. Remove with the `from=wishlist` flag returns the contents partial
+       with the remaining rows.
+    3. Removing the last item returns the "Your wishlist is empty" empty
+       state.
+  - `WishlistView` reads items through `wishlist__user=request.user`, so
+    viewing the page never creates a wishlist. The base action view gained
+    a `respond` hook, which `RemoveFromWishlistView` overrides when the
+    flag is present.
+  - Each row of `_wishlist_contents.html` has an "Unavailable" badge when
+    needed, the existing add-to-cart partial, and the wishlist button.
+    `_wishlist_button.html` takes an `on_wishlist_page` option that
+    targets `#wishlist-contents` and sends the flag.
+  - Ordinary tests cover:
+    - the rows' Remove button targeting the contents and sending the flag
+    - the badge and disabled add-to-cart for unavailable products
+    - adding to the cart leaving the item saved
+    - the empty state for a customer with no wishlist
+    - the anonymous redirect
+    - privacy in both directions
+- **Deviations:** None. The user approved all three proposed behaviors
+  and every test unchanged.
+- **Follow-up questions:** After the log was written, the user asked how
+  to verify the phase manually in the browser. The answer was a nine-step
+  walkthrough:
+  - the anonymous redirect and the empty state
+  - saving three products, EchoPatch among them, from their detail pages
+  - newest-first order, the Unavailable badge and the disabled
+    add-to-cart button
+  - add-to-cart leaving the item saved
+  - in-place removal, checking the `from=wishlist` POST in DevTools, down
+    to the empty state
+  - privacy between `customer` and `employee`
+  - the Phase 1 detail-page button still swapping only itself
+
+  It noted that the page has no navbar link until Phase 3, so it's
+  reached by typing `/wishlist/`, and that `seed` doesn't add a demo
+  wishlist until Phase 5. The user then asked for these two prompts to be
+  added to this entry.
+- **Sideways:**
+  - Cycle 1's first run failed with `NoReverseMatch` rather than on an
+    assertion. Under the TDD skill that isn't a real RED, so the URL, view
+    and page shell were built and the test re-run before it was shown.
+  - Cycle 2 originally promised a second assertion that Remove without
+    the flag returns the button. It was dropped because Phase 1's
+    `test_remove_returns_the_save_button` already covers it, and this was
+    said when the test was presented.
+  - `ruff format --check` flagged `wishlists/tests.py`, and it was
+    reformatted.
+  - `git diff` shows `db.sqlite3` as modified with no deliberate change
+    this session. It was flagged to the user to check before committing.
+
 ## 2026-10-18 — Wishlist Phase 1 built: save from the product detail page
 
 ### Prompts

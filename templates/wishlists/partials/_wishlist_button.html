@@ -1,11 +1,17 @@
 {# The Save control, in all its states. Its saved state comes from the #}
 {# wishlists context processor's wishlist_product_ids. Never btn-primary: #}
-{# the page's primary action stays add-to-cart. #}
+{# the page's primary action stays add-to-cart. Include with on_wishlist_page #}
+{# on the wishlist page, where Remove re-renders #wishlist-contents instead. #}
 {% if user.is_authenticated %}
   {% if product.pk in wishlist_product_ids %}
     <button
       hx-post="{% url 'wishlists:remove' product.pk %}"
-      hx-swap="outerHTML"
+      {% if on_wishlist_page %}
+        hx-target="#wishlist-contents"
+        hx-vals='{"from": "wishlist"}'
+      {% else %}
+        hx-swap="outerHTML"
+      {% endif %}
       aria-pressed="true"
       class="btn btn-outline btn-sm">
       <span class="text-error" aria-hidden="true">♥</span> Saved

@@ -9,10 +9,24 @@ product up across the whole catalog, unavailable products included.
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, render
 from django.views import View
+from django.views.generic import TemplateView
 
 from products.models import Product
 
-from .models import Wishlist
+from .models import Wishlist, WishlistItem
+
+
+class WishlistView(LoginRequiredMixin, TemplateView):
+    """The signed-in user's own wishlist page — no user or wishlist id in the URL."""
+
+    template_name = "wishlists/wishlist.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["items"] = WishlistItem.objects.filter(
+            wishlist__user=self.request.user
+        ).select_related("product")
+        return context
 
 
 class WishlistActionView(LoginRequiredMixin, View):
@@ -24,13 +38,19 @@ class WishlistActionView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
-        self.act(Wishlist.for_user(request.user), product)
-        return render(
-            request, "wishlists/partials/_wishlist_button.html", {"product": product}
-        )
+        wishlist = Wishlist.for_user(request.user)
+        self.act(wishlist, product)
+        return self.respond(wishlist, product)
 
     def act(self, wishlist, product):
         raise NotImplementedError
+
+    def respond(self, wishlist, product):
+        return render(
+            self.request,
+            "wishlists/partials/_wishlist_button.html",
+            {"product": product},
+        )
 
 
 class AddToWishlistView(WishlistActionView):
@@ -39,5 +59,16 @@ class AddToWishlistView(WishlistActionView):
 
 
 class RemoveFromWishlistView(WishlistActionView):
+    """Remove; from the wishlist page (``from=wishlist``) re-render its rows."""
+
     def act(self, wishlist, product):
         wishlist.remove(product)
+
+    def respond(self, wishlist, product):
+        if self.request.POST.get("from") != "wishlist":
+            return super().respond(wishlist, product)
+        return render(
+            self.request,
+            "wishlists/partials/_wishlist_contents.html",
+            {"items": wishlist.items.select_related("product")},
+        )
