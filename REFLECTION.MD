@@ -1,3 +1,45 @@
+##Product Reviews
+
+##Question 1 - Review TDD. Choose one phase where /tdd was used. Identify one behavior selected for TDD and explain why it was a good candidate for TDD. Then explain what the test checked and how a passing test provided evidence that the behavior worked. Name the test is your response.
+
+# The TDD option I'm choosing is Phase 6's 'def test_list_shows_product_reviewer_rating_and_excerpt' in line 135-147 of '@reviews/test_backoffice.py' this test asserts wheather the backoffice tab properly displayed the reviews listed. This is a good candidate for TDD as if this test didn't pass, the reviews wouldn't display in the backoffice at all with all of the details for employees to look through and edit if they choose. This test is using it's asserts to prove that each review has an attached reviewer: 'assert "Mira K." in html', product: 'assert product.name in html', rating: 'assert "3★" in html' and their comments in the review 'assert "A" * 79 + "…" in html + assert "A" * 200 not in html'. When these tests pass, it means at least one review in the back office exists that contains the necessary atrributes needed for when an employee wishes to edit or delete a review. Meaning it contains the name, product, rating, and comment all within the /backoffice/review/ tab instead of a employee needing to track each review down personally.
+
+##Question 2 - Trace an authorization rule. Find the code that deletes a review. Identify the exact view or function that handles the request and explain how the code determines whether the current user is allowed to perform the action. Reference filenames and line numbers in your response.
+
+# Well to first begin we have to find where the user gets that permission and that is from class OwnReviewView in lines 68-82 of @reviews/views/py. 
+'def own_review(self, pk):
+        product = get_object_or_404(Product, pk=pk)
+        review = Review.objects.filter(user=self.request.user, product=product)
+        return product, review.first()' 
+this displays the review if the user is the owner of the review using the .request.user. this shows up on the delete request in line 126 'class ReviewDeleteConfirmView(OwnReviewView):' Which checks if the author of the review 'own_review=review' wants to delete the review. This is later confirmed in line 136 'class ReviewDeleteView(OwnReviewView):' which uses 'review = self.own_review(pk) (line 141) to check if the author is the primary creator of the review, then they use 'review.delete()' (line 143) to remove the review and returns the empty review slot space back in case a new review needs to be written in 'return render_slot(request, product, oob_summary=True) (line 144).
+
+##Question 3 - Trace one HTMX interaction. Choose the meaningful HTMX interaction you added. Identify the template containing the hx-post attribute, the URL that receives the request, the view that handles it, and the HTML or partial returned by Django. Explain which part of the page HTMX replaces and what the user sees after the request completes. Reference filenames and line numbers in your response.
+
+# Most of the HTMX interactions added were for the buttons, the one I am choosing is 
+    '<button type="button" class="btn btn-error btn-sm"
+                hx-post="{% url 'reviews:delete' product.pk %}"
+                hx-target="#review-author-slot" hx-swap="outerHTML">Yes, delete</button>' 
+located in '@templates/reviews/partials/_review_card.html' line 25-27 this is essentially the button that displays when you are confirming whether to delete a review. The hx-post sends us to @reviews/urls.py line 13-17:
+    'path(
+        "reviews/<int:pk>/delete/confirm/",
+        views.ReviewDeleteConfirmView.as_view(),
+        name="delete_confirm",
+    ),'
+This url leads us to the ReviewDeleteConfirmView in '@reviews/views.py' line 126: 
+'class ReviewDeleteConfirmView(OwnReviewView):
+    """The author's card in its "Delete this review?" state."""
+
+    def get(self, request, pk):
+        product, review = self.own_review(pk)
+        if review is None:
+            return render_slot(request, product)
+        return render_slot(request, product, slot="confirm_delete", own_review=review)'
+mentioned in a previous question, this is the double check if the author wishes to delete their review if they select the new hx-swap button "Yes, Delete" it will move on to delete the review. From the websites perspective when you click the "Delete" button on your review the site will double check with you, cuasing the button to HX-Swap to "Yes, Delete" and a new button appears if you wish to cancel. This is what the HTMX is replacing as the actual deletion process is donw through a different view and url.
+
+##Question 4 - One design decision from grill-me. Choose one design decision from your interview that required you to choose between reasonable options. Explain the options, the decision you made, and one tradeoff you accepted. Then identify where that decision appears in your PRD or completed code.
+
+#I would say Q5: 'reviews only on the product detail page, with a "★ 4.3 · 12 reviews" summary line' in line 479-480 of the PROMPTS.md section. This is because it made the reviews only show up on the product detail page over having stars show up on the catalog with their products. That is what I orginally wanted, but when it mentioned the tradeoffs and increased coding needed to put it in I decided against it, running the pytest is already taking about three minutes to do so avoiding adding more code is the better option to make sure I am not overloading the project. Though, this means customers cannot check the product's rating at a glance and need to click on the product to see how reccomended it is. Though this is not a significant trade-off, it can be annoying for some customers. This shows up on the PRD at line 19 which states that the Reviews section is added to every product's detail page instead of detail page + star rating on catalog like I orginally planned.
+
 ##Account Security Center
 
 ##Question 1 - Review one phase. Choose one phase from plans/account-security.md. What working behavior was supposed to exist at the end of that phase? Explain how you verified it in the browser and what you observed before you approved the next phase. If you found a problem, explain the correction. If it worked the first time, explain the evidence you used to approve it.
