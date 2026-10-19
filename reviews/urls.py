@@ -16,4 +16,5 @@ urlpatterns = [
         name="delete_confirm",
     ),
     path("reviews/<int:pk>/delete/", views.ReviewDeleteView.as_view(), name="delete"),
+    path("reviews/<int:pk>/more/", views.ReviewMoreView.as_view(), name="more"),
 ]

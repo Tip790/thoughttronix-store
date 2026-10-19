@@ -672,6 +672,97 @@ def test_editing_a_review_keeps_its_place_in_the_list(
     assert positions == sorted(positions)
 
 
+# --- Show more reviews ------------------------------------------------------
+
+
+def more_url(product, page):
+    return f"{reverse('reviews:more', kwargs={'pk': product.pk})}?page={page}"
+
+
+def reviews_by_others(product, count):
+    """``count`` reviews, comment #00 the newest, a day apart."""
+    now = timezone.now()
+    for i in range(count):
+        reviewer = get_user_model().objects.create_user(username=f"reviewer{i}")
+        review(
+            reviewer,
+            product,
+            comment=f"Comment #{i:02d}, newest first.",
+            created_at=now - timedelta(days=i),
+        )
+
+
+def test_section_offers_show_more_only_past_ten_other_reviews(client, buyer, product):
+    reviews_by_others(product, 10)
+    review(buyer, product, comment="Mine doesn't count toward the ten.")
+    client.force_login(buyer)
+
+    exactly_ten = client.get(section_url(product)).content.decode()
+    latecomer = get_user_model().objects.create_user(username="latecomer")
+    review(latecomer, product, created_at=timezone.now() - timedelta(days=30))
+    eleven = client.get(section_url(product)).content.decode()
+
+    assert "Show more reviews" not in exactly_ten
+    assert "Show more reviews" in eleven
+    assert f'hx-get="{more_url(product, 2)}"' in eleven
+
+
+def test_more_returns_the_next_ten_newest_first_until_the_last_page(client, product):
+    reviews_by_others(product, 25)
+
+    middle = client.get(more_url(product, 2)).content.decode()
+    last = client.get(more_url(product, 3)).content.decode()
+
+    assert all(f"Comment #{i:02d}" in middle for i in range(10, 20))
+    positions = [middle.index(f"Comment #{i:02d}") for i in range(10, 20)]
+    assert positions == sorted(positions)
+    assert "Comment #09" not in middle
+    assert "Comment #20" not in middle
+    assert f'hx-get="{more_url(product, 3)}"' in middle
+    assert all(f"Comment #{i:02d}" in last for i in range(20, 25))
+    positions = [last.index(f"Comment #{i:02d}") for i in range(20, 25)]
+    assert positions == sorted(positions)
+    assert "Comment #19" not in last
+    assert "Show more reviews" not in last
+
+
+def test_your_own_review_never_appears_in_a_batch(client, buyer, product):
+    reviews_by_others(product, 25)
+    review(
+        buyer,
+        product,
+        comment="Mine stays in my slot.",
+        created_at=timezone.now() - timedelta(days=12, hours=12),
+    )
+    client.force_login(buyer)
+
+    batches = [client.get(more_url(product, page)).content.decode() for page in (2, 3)]
+
+    assert all("Mine stays in my slot." not in batch for batch in batches)
+    assert "Comment #10" in batches[0]
+    assert "Comment #19" in batches[0]
+    assert "Comment #20" in batches[1]
+
+
+def test_more_is_a_public_partial(client, product):
+    reviews_by_others(product, 11)
+
+    response = client.get(more_url(product, 2))
+
+    assert response.status_code == HTTPStatus.OK
+    assertTemplateUsed(response, "reviews/partials/_more_reviews.html")
+    assertTemplateNotUsed(response, "base.html")
+    assert "Comment #10" in response.content.decode()
+
+
+def test_more_for_an_unknown_product_or_page_is_404(client, product):
+    reviews_by_others(product, 11)
+    unknown_product = f"{reverse('reviews:more', kwargs={'pk': 99999})}?page=2"
+
+    assert client.get(unknown_product).status_code == HTTPStatus.NOT_FOUND
+    assert client.get(more_url(product, 3)).status_code == HTTPStatus.NOT_FOUND
+
+
 # --- The author's slot ------------------------------------------------------
 
 

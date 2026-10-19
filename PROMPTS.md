@@ -28,6 +28,59 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 4 built with TDD: show more reviews
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 4"
+2. "approve, continue"
+3. "approve, continue"
+4. "approve, continue"
+5. "approve, continue"
+6. "approve, continue"
+7. "approve, continue"
+8. "approve, continue"
+9. "approved, continue"
+
+### Summary
+
+- **Outcome:** Phase 4 of `plans/reviews.md` is built and committed.
+  All 570 tests pass, 5 of them new since Phase 3. Ruff check and ruff
+  format are clean.
+  - A new public `ReviewMoreView` (`ListView`, `paginate_by = 10`) at
+    `/reviews/<pk>/more/?page=N`, named `reviews:more`. An unknown
+    product pk or a page past the end is a 404, from Django's paginator.
+  - A new `other_reviews(user, product)` helper is the one queryset for
+    the section's first page and every later batch: newest first, minus
+    the signed-in visitor's own review. `ReviewSectionView` now paginates
+    it and passes `page_obj`. The summary still counts every review.
+  - New partials: `_more_button.html` (an outline "Show more reviews"
+    button, shown only when `page_obj.has_next`, that swaps its own
+    wrapper with `hx-target="closest div"` and disables itself while
+    loading) and `_more_reviews.html` (the batch's cards, then the next
+    button). Nothing above the button moves.
+  - Three TDD behaviors went RED then GREEN: the button appears only past
+    ten other reviews (the viewer's own doesn't count); batches continue
+    newest first and the last page drops the button; and the viewer's own
+    review never appears in a batch. Regular tests cover anonymous
+    access, the partial, and the 404s.
+  - The user ran the agent's browser walkthrough (23 test reviews made in
+    the shell, since the seed only gains a long review list in Phase 5)
+    and reported that it passed.
+- **Deviations:** none. Every proposal and test was approved unchanged.
+- **Sideways:**
+  - Two first runs failed for the wrong reason: the paging test hit
+    `TemplateDoesNotExist` until an empty batch partial was added, then a
+    `ValueError` from `str.index`. Explicit presence asserts were added
+    before the position checks so RED was a real assertion failure.
+  - Exclusion of the viewer's own review was held back from the batch
+    view in cycle 2 on purpose, so cycle 3's test could go RED honestly.
+  - The full suite outran the two-minute foreground timeout and finished
+    in the background (2m16s).
+  - Ruff format reflowed `reviews/tests.py`.
+  - `db.sqlite3` and `REFLECTION.MD` were left out of the commit. Both
+    were changed outside this session.
+
 ## 2026-10-18 — Reviews Phase 3 built with TDD: edit and delete your own review in place
 
 ### Prompts

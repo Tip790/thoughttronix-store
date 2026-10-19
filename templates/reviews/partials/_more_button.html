@@ -1,0 +1,11 @@
+{# "Show more reviews" — present only while another page remains. A click #}
+{# swaps this wrapper for the next batch, which carries its own button, so #}
+{# reviews append below and nothing above them moves. #}
+{% if page_obj.has_next %}
+  <div class="mt-6 flex justify-center">
+    <button type="button" class="btn btn-outline"
+            hx-get="{% url 'reviews:more' product.pk %}?page={{ page_obj.next_page_number }}"
+            hx-target="closest div" hx-swap="outerHTML"
+            hx-disabled-elt="this">Show more reviews</button>
+  </div>
+{% endif %}

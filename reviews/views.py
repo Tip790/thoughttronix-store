@@ -7,10 +7,11 @@ never fetched by id — so no customer can touch another's review.
 """
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, render
 from django.views import View
-from django.views.generic import TemplateView
+from django.views.generic import ListView, TemplateView
 
 from products.models import Product
 
@@ -19,6 +20,16 @@ from .models import Review
 
 REVIEWS_PER_PAGE = 10
 SLOT_TEMPLATE = "reviews/partials/_author_slot.html"
+
+
+def other_reviews(user, product):
+    """Everyone's reviews of ``product`` but the visitor's own, newest first.
+
+    The section's list and every Show more batch page through this same
+    queryset; the visitor's own review lives in their slot instead.
+    """
+    reviews = product.reviews.select_related("user")
+    return reviews.exclude(user=user) if user.is_authenticated else reviews
 
 
 def slot_context(user, product, form=None):
@@ -142,15 +153,34 @@ class ReviewSectionView(TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         product = get_object_or_404(Product, pk=self.kwargs["pk"])
-        reviews = product.reviews.select_related("user")
-        others = reviews.exclude(user=user) if user.is_authenticated else reviews
+        page = Paginator(other_reviews(user, product), REVIEWS_PER_PAGE).page(1)
         context.update(
             product=product,
-            summary=reviews.summary(),
-            reviews=others[:REVIEWS_PER_PAGE],
+            summary=product.reviews.summary(),
+            reviews=page.object_list,
+            page_obj=page,
             **slot_context(user, product),
         )
         return context
+
+
+class ReviewMoreView(ListView):
+    """The next batch of other customers' reviews, behind Show more.
+
+    Public, like the section. ``?page=N`` continues the section's list,
+    and the batch carries a fresh button only while more remain.
+    """
+
+    template_name = "reviews/partials/_more_reviews.html"
+    context_object_name = "reviews"
+    paginate_by = REVIEWS_PER_PAGE
+
+    def get_queryset(self):
+        self.product = get_object_or_404(Product, pk=self.kwargs["pk"])
+        return other_reviews(self.request.user, self.product)
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(product=self.product, **kwargs)
 
 
 class ReviewCreateView(LoginRequiredMixin, View):

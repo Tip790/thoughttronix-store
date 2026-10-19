@@ -1,0 +1,9 @@
+{# The next batch of other customers' reviews, swapped in for the Show #}
+{# more button: the batch lands below the list, then its own button if #}
+{# another page remains. #}
+<ul class="mt-4 space-y-4">
+  {% for review in reviews %}
+    <li>{% include "reviews/partials/_review_card.html" %}</li>
+  {% endfor %}
+</ul>
+{% include "reviews/partials/_more_button.html" %}
