@@ -1,12 +1,14 @@
 {# The review form, swapped into the author's slot. Bound forms keep what #}
 {# was typed: the comment's value and the checked star. Each star is a #}
 {# real radio input with its own label, so the rating works by keyboard. #}
-<form hx-post="{% url 'reviews:create' product.pk %}"
+{# In the edit slot it posts to update and offers Cancel, which fetches #}
+{# the unchanged card. #}
+<form hx-post="{% if slot == 'edit' %}{% url 'reviews:update' product.pk %}{% else %}{% url 'reviews:create' product.pk %}{% endif %}"
       hx-target="#review-author-slot"
       hx-swap="outerHTML"
       class="card bg-base-100 shadow-md">
   <div class="card-body gap-4">
-    <h3 class="card-title text-lg">Write a review</h3>
+    <h3 class="card-title text-lg">{% if slot == "edit" %}Edit your review{% else %}Write a review{% endif %}</h3>
 
     <fieldset>
       <legend class="label mb-1">Your rating</legend>
@@ -37,7 +39,14 @@
     </div>
 
     <div class="card-actions justify-end">
-      <button type="submit" class="btn btn-outline">Post review</button>
+      {% if slot == "edit" %}
+        <button type="button" class="btn btn-ghost"
+                hx-get="{% url 'reviews:card' product.pk %}"
+                hx-target="#review-author-slot" hx-swap="outerHTML">Cancel</button>
+        <button type="submit" class="btn btn-outline">Save</button>
+      {% else %}
+        <button type="submit" class="btn btn-outline">Post review</button>
+      {% endif %}
     </div>
   </div>
 </form>

@@ -1,6 +1,7 @@
 {# The visitor's own slot — one stable element at the top of the section. #}
 {# Every write swaps only this element (outerHTML), so nothing else moves. #}
-{# States come from views.slot_context: sign_in, note, form, card. Write #}
+{# States come from views.slot_context: sign_in, note, form, card — plus #}
+{# edit and confirm_delete from the author's own endpoints. Write #}
 {# responses pass oob_summary to refresh the summary line too. #}
 <div id="review-author-slot" class="mt-6">
   {% if slot == "sign_in" %}
@@ -14,11 +15,11 @@
     <div class="alert" role="status">
       <span>Only customers who've bought this product can review it.</span>
     </div>
-  {% elif slot == "form" %}
+  {% elif slot == "form" or slot == "edit" %}
     {% include "reviews/partials/_review_form.html" %}
-  {% elif slot == "card" %}
+  {% elif slot == "card" or slot == "confirm_delete" %}
     <p class="mb-2 text-sm font-semibold opacity-70">Your review</p>
-    {% include "reviews/partials/_review_card.html" with review=own_review %}
+    {% include "reviews/partials/_review_card.html" with review=own_review owner=True %}
   {% endif %}
 </div>
 {% if oob_summary %}{% include "reviews/partials/_summary.html" with oob=True %}{% endif %}

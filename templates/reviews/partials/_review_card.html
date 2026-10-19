@@ -1,5 +1,7 @@
 {# One review — used for everyone's reviews. The stars are read-only: #}
-{# DaisyUI rating masks, the score spelled out for screen readers. #}
+{# DaisyUI rating masks, the score spelled out for screen readers. In the #}
+{# author's slot (owner) it carries Edit and Delete, or the delete #}
+{# confirmation when slot is confirm_delete; each swaps only the slot. #}
 <article class="card bg-base-100 shadow-md">
   <div class="card-body gap-3">
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -16,5 +18,27 @@
       <time datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"F j, Y" }}</time>
       {% if review.is_edited %}· edited{% endif %}
     </p>
+    {% if owner and slot == "confirm_delete" %}
+      <div class="alert alert-error alert-soft" role="alert">
+        <span>Delete this review?</span>
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-error btn-sm"
+                  hx-post="{% url 'reviews:delete' product.pk %}"
+                  hx-target="#review-author-slot" hx-swap="outerHTML">Yes, delete</button>
+          <button type="button" class="btn btn-ghost btn-sm"
+                  hx-get="{% url 'reviews:card' product.pk %}"
+                  hx-target="#review-author-slot" hx-swap="outerHTML">Keep it</button>
+        </div>
+      </div>
+    {% elif owner %}
+      <div class="card-actions justify-end">
+        <button type="button" class="btn btn-ghost btn-sm"
+                hx-get="{% url 'reviews:edit' product.pk %}"
+                hx-target="#review-author-slot" hx-swap="outerHTML">Edit</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                hx-get="{% url 'reviews:delete_confirm' product.pk %}"
+                hx-target="#review-author-slot" hx-swap="outerHTML">Delete</button>
+      </div>
+    {% endif %}
   </div>
 </article>

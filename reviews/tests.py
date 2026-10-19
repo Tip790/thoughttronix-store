@@ -401,6 +401,277 @@ def test_staff_buyer_can_review(client, staff_user, product):
     assert Review.objects.filter(user=staff_user).exists()
 
 
+# --- Edit and delete your own review ----------------------------------------
+
+
+def own_url(name, product):
+    return reverse(f"reviews:{name}", kwargs={"pk": product.pk})
+
+
+def test_update_saves_and_returns_the_edited_card_and_the_summary_out_of_band(
+    client, buyer, other_buyer, product
+):
+    mine = review(
+        buyer, product, rating=2, created_at=timezone.now() - timedelta(days=3)
+    )
+    review(other_buyer, product, rating=4)
+    client.force_login(buyer)
+
+    response = client.post(
+        own_url("update", product), {"rating": "5", "comment": "  Grew on me a lot.  "}
+    )
+    content = response.content.decode()
+
+    mine.refresh_from_db()
+    assert (mine.rating, mine.comment) == (5, "Grew on me a lot.")
+    assert mine.is_edited
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assertTemplateNotUsed(response, "base.html")
+    assert "Your review" in content
+    assert "Grew on me a lot." in content
+    assert "· edited" in content
+    assert 'id="review-summary" hx-swap-oob="true"' in content
+    assert "★ 4.5 · 2 reviews" in content
+    assert "<form" not in content
+
+
+def test_delete_removes_only_your_review_and_returns_the_empty_form(
+    client, buyer, other_buyer, product
+):
+    review(buyer, product, rating=1, comment="Changed my mind about this.")
+    theirs = review(other_buyer, product, rating=5)
+    client.force_login(buyer)
+
+    response = client.post(own_url("delete", product))
+    content = response.content.decode()
+
+    assert list(Review.objects.all()) == [theirs]
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assert f'hx-post="{create_url(product)}"' in content
+    assert "Write a review" in content
+    assert "checked" not in content
+    assert "Changed my mind about this." not in content
+    assert 'id="review-summary" hx-swap-oob="true"' in content
+    assert "★ 5.0 · 1 review" in content
+
+
+STALE_REQUESTS = [
+    ("get", "edit"),
+    ("post", "update"),
+    ("get", "card"),
+    ("get", "delete_confirm"),
+    ("post", "delete"),
+]
+
+
+@pytest.mark.parametrize(("method", "name"), STALE_REQUESTS)
+@pytest.mark.parametrize(
+    ("who", "slot_text"),
+    [
+        ("buyer", "Write a review"),
+        ("customer", "Only customers who've bought this product can review it."),
+    ],
+)
+def test_a_review_that_no_longer_exists_returns_the_current_slot(
+    request, client, other_buyer, product, method, name, who, slot_text
+):
+    """A stale tab — or someone else's review — is never an error."""
+    theirs = review(other_buyer, product, comment="Not yours to touch.")
+    client.raise_request_exception = False  # See what the browser would see.
+    client.force_login(request.getfixturevalue(who))
+
+    response = getattr(client, method)(
+        own_url(name, product), {"rating": 1, "comment": "Overwrite attempt."}
+    )
+    content = response.content.decode()
+
+    assert response.status_code == HTTPStatus.OK
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assert slot_text in content
+    assert "Not yours to touch." not in content
+    assert list(Review.objects.all()) == [theirs]
+    theirs.refresh_from_db()
+    assert (theirs.rating, theirs.comment) == (4, "Not yours to touch.")
+
+
+def test_your_card_carries_edit_and_delete_controls(client, buyer, product):
+    review(buyer, product)
+    client.force_login(buyer)
+
+    content = client.get(section_url(product)).content.decode()
+
+    assert f'hx-get="{own_url("edit", product)}"' in content
+    assert f'hx-get="{own_url("delete_confirm", product)}"' in content
+
+
+def test_other_reviews_carry_no_controls(client, buyer, other_buyer, product):
+    review(other_buyer, product)
+    client.force_login(buyer)
+
+    content = client.get(section_url(product)).content.decode()
+
+    assert own_url("edit", product) not in content
+    assert own_url("delete_confirm", product) not in content
+
+
+def test_edit_form_is_prefilled_with_your_review(client, buyer, product):
+    review(buyer, product, rating=2, comment="Bit of a letdown.")
+    client.force_login(buyer)
+
+    response = client.get(own_url("edit", product))
+    content = response.content.decode()
+
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assert 'id="review-author-slot"' in content
+    assert f'hx-post="{own_url("update", product)}"' in content
+    assert "Edit your review" in content
+    assert re.search(r">\s*Bit of a letdown\.</textarea>", content)
+    assert re.search(r'value="2"[^>]*checked', content)
+    assert len(re.findall(r'type="radio"[^>]*checked', content)) == 1
+    assert f'hx-get="{own_url("card", product)}"' in content
+    assert "hx-swap-oob" not in content
+
+
+def test_invalid_update_returns_the_form_with_errors_and_what_was_typed(
+    client, buyer, product
+):
+    mine = review(buyer, product, rating=2, comment="Bit of a letdown.")
+    client.force_login(buyer)
+
+    response = client.post(
+        own_url("update", product), {"rating": "3", "comment": "Meh."}
+    )
+    content = response.content.decode()
+
+    mine.refresh_from_db()
+    assert (mine.rating, mine.comment, mine.is_edited) == (
+        2,
+        "Bit of a letdown.",
+        False,
+    )
+    assert "at least 10 characters" in content
+    assert f'hx-post="{own_url("update", product)}"' in content
+    assert re.search(r">\s*Meh\.</textarea>", content)
+    assert re.search(r'value="3"[^>]*checked', content)
+
+
+def test_card_endpoint_returns_your_card_unchanged(client, buyer, product):
+    review(buyer, product, comment="Exactly as I left it.")
+    client.force_login(buyer)
+
+    response = client.get(own_url("card", product))
+    content = response.content.decode()
+
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assert "Your review" in content
+    assert "Exactly as I left it." in content
+    assert "edited" not in content
+    assert "<form" not in content
+    assert "hx-swap-oob" not in content
+
+
+def test_delete_confirmation_asks_inside_the_card(client, buyer, product):
+    review(buyer, product, comment="Still here until I say so.")
+    client.force_login(buyer)
+
+    content = client.get(own_url("delete_confirm", product)).content.decode()
+
+    assert Review.objects.exists()
+    assert "Still here until I say so." in content
+    assert "Delete this review?" in content
+    assert re.search(
+        rf'class="btn btn-error[^"]*"\s+hx-post="{own_url("delete", product)}"', content
+    )
+    assert "Yes, delete" in content
+    assert "Keep it" in content
+    assert f'hx-get="{own_url("card", product)}"' in content
+    assert own_url("edit", product) not in content
+    assert "btn-primary" not in content
+
+
+def test_author_whose_order_was_cancelled_can_still_edit_and_delete(
+    client, buyer, product
+):
+    review(buyer, product, rating=5)
+    Order.objects.filter(user=buyer).update(status=Order.Status.CANCELLED)
+    client.force_login(buyer)
+
+    edit = client.get(own_url("edit", product)).content.decode()
+    client.post(own_url("update", product), {"rating": 2, "comment": "Sent it back."})
+    updated = Review.objects.get()
+    deleted = client.post(own_url("delete", product)).content.decode()
+
+    assert "Edit your review" in edit
+    assert (updated.rating, updated.comment) == (2, "Sent it back.")
+    assert not Review.objects.exists()
+    assert "Only customers who've bought this product can review it." in deleted
+
+
+@pytest.mark.parametrize(("method", "name"), STALE_REQUESTS)
+def test_anonymous_requests_redirect_to_login_and_change_nothing(
+    client, buyer, product, method, name
+):
+    mine = review(buyer, product, rating=5, comment="Leave this alone.")
+
+    response = getattr(client, method)(
+        own_url(name, product), {"rating": 1, "comment": "Anonymous rewrite."}
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url.startswith(reverse("accounts:login"))
+    mine.refresh_from_db()
+    assert (mine.rating, mine.comment, mine.is_edited) == (
+        5,
+        "Leave this alone.",
+        False,
+    )
+
+
+@pytest.mark.parametrize(("method", "name"), STALE_REQUESTS)
+def test_unknown_product_pk_is_404_for_your_review(client, buyer, method, name):
+    client.force_login(buyer)
+
+    response = getattr(client, method)(reverse(f"reviews:{name}", kwargs={"pk": 99999}))
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_editing_a_review_keeps_its_place_in_the_list(
+    client, buyer, other_buyer, customer, product
+):
+    now = timezone.now()
+    review(customer, product, comment="Newest of the three.", created_at=now)
+    review(
+        buyer,
+        product,
+        comment="Middle, about to be edited.",
+        created_at=now - timedelta(days=1),
+    )
+    review(
+        other_buyer,
+        product,
+        comment="Oldest of the three.",
+        created_at=now - timedelta(days=2),
+    )
+    client.force_login(buyer)
+    client.post(
+        own_url("update", product), {"rating": 1, "comment": "Middle, now edited."}
+    )
+    client.logout()
+
+    content = client.get(section_url(product)).content.decode()
+
+    positions = [
+        content.index(text)
+        for text in [
+            "Newest of the three.",
+            "Middle, now edited.",
+            "Oldest of the three.",
+        ]
+    ]
+    assert positions == sorted(positions)
+
+
 # --- The author's slot ------------------------------------------------------
 
 

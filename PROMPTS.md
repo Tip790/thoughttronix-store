@@ -28,6 +28,67 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 3 built with TDD: edit and delete your own review in place
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 3"
+2. "that works, continue"
+3. "approved, continue"
+4. "good, continue to cycle 2"
+5. "approved, continue"
+6. "good, continue to cycle 3"
+7. "approved, continue"
+8. "continue!"
+9. "check works, continue"
+
+### Summary
+
+- **Outcome:** Phase 3 of `plans/reviews.md` is built and committed.
+  All 565 tests pass, 30 of them new since Phase 2. Ruff check and ruff
+  format are clean, and `makemigrations --check` finds nothing pending.
+  - Five new endpoints in `reviews/views.py`, all behind
+    `LoginRequiredMixin` and keyed by product pk: edit form, update,
+    card (powers Cancel and Keep it), delete confirmation, and delete.
+  - They share an `OwnReviewView` base whose `own_review()` finds the
+    review only through `request.user`, with `.filter(...).first()`.
+    A missing review is never a 404: every endpoint then returns the
+    slot's current state (the form or the note). Another customer's
+    review is never reachable.
+  - A new `render_slot()` helper renders the slot in a given state or
+    re-derives it from `slot_context()`, and adds the out-of-band summary
+    for writes. Update and delete send it; edit, card and confirm don't.
+  - `_author_slot` gained `edit` and `confirm_delete` states.
+    `_review_card` takes `owner` for Edit/Delete (ghost) or the inline
+    "Delete this review?" alert with `btn-error` Yes, delete and ghost
+    Keep it. `_review_form` posts to update with Save and Cancel when
+    editing. Every control swaps only `#review-author-slot`.
+  - Three TDD behaviors went RED then GREEN: update saves and returns
+    the edited card with the summary; delete removes only your review
+    and returns the empty form with the summary; and a stale or foreign
+    request to any of the five endpoints returns the current slot.
+  - Regular tests cover the pre-filled edit form, invalid update keeping
+    what was typed, the card and confirm states, the cancelled-order
+    author, anonymous redirects, unknown pks, owner-only controls, and
+    an edit keeping its place in the list.
+  - The user ran the agent's ten-step browser walkthrough and reported
+    that it passed.
+- **Deviations:** none. Every proposal and test was approved unchanged.
+  The agent flagged one reading of the PRD for the user: an author whose
+  order was cancelled gets the only-buyers note after deleting, not the
+  form, since they can no longer create a review. A test pins it, and
+  the user didn't ask to change it.
+- **Sideways:**
+  - The shared base view was written while scaffolding cycle 1 and
+    already held the stale-request fallback, so the third TDD test passed
+    on its first run. The agent said so, then swapped in a naive
+    `get_object_or_404` lookup as a deliberate mutant. All ten cases
+    failed on `404 == 200`, and that RED went to the user for approval.
+    GREEN was reverting the mutant.
+  - Ruff format reflowed `reviews/views.py` and `reviews/tests.py`.
+  - `db.sqlite3` and `REFLECTION.MD` were left out of the commit. Both
+    were changed outside this session.
+
 ## 2026-10-18 — Reviews Phase 2 built with TDD: visitor states and writing a review
 
 ### Prompts

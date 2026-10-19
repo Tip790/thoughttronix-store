@@ -38,6 +38,96 @@ def slot_context(user, product, form=None):
     return {"slot": "note"}
 
 
+def render_slot(request, product, oob_summary=False, **state):
+    """Render the author's slot, in ``state`` or else its current state.
+
+    Writes pass ``oob_summary`` so the summary line refreshes with them.
+    """
+    context = {"product": product, **(state or slot_context(request.user, product))}
+    if oob_summary:
+        context.update(summary=product.reviews.summary(), oob_summary=True)
+    return render(request, SLOT_TEMPLATE, context)
+
+
+class OwnReviewView(LoginRequiredMixin, View):
+    """Base for the endpoints that act on the requesting user's own review.
+
+    The review is found only through ``request.user``, so another
+    customer's review is never in reach. When there is none — a stale tab
+    after a delete, or a review that was never written — the slot comes
+    back in its current state (the form or the note), never an error.
+    Authorship is the only gate: eligibility is checked on create alone,
+    so a later cancellation never locks an author out.
+    """
+
+    def own_review(self, pk):
+        product = get_object_or_404(Product, pk=pk)
+        review = Review.objects.filter(user=self.request.user, product=product)
+        return product, review.first()
+
+
+class ReviewEditView(OwnReviewView):
+    """The author's review as a pre-filled form, in the same slot."""
+
+    def get(self, request, pk):
+        product, review = self.own_review(pk)
+        if review is None:
+            return render_slot(request, product)
+        return render_slot(
+            request,
+            product,
+            slot="edit",
+            own_review=review,
+            form=ReviewForm(instance=review),
+        )
+
+
+class ReviewUpdateView(OwnReviewView):
+    """Save the author's edit and return the updated card, or the form with
+    its errors. A save refreshes the summary out of band."""
+
+    def post(self, request, pk):
+        product, review = self.own_review(pk)
+        if review is None:
+            return render_slot(request, product, oob_summary=True)
+        form = ReviewForm(request.POST, instance=review)
+        if not form.is_valid():
+            return render_slot(
+                request, product, slot="edit", own_review=review, form=form
+            )
+        form.save()
+        return render_slot(request, product, oob_summary=True)
+
+
+class ReviewCardView(OwnReviewView):
+    """The author's own card, unchanged — Cancel and Keep it fetch this."""
+
+    def get(self, request, pk):
+        product, _ = self.own_review(pk)
+        return render_slot(request, product)
+
+
+class ReviewDeleteConfirmView(OwnReviewView):
+    """The author's card in its "Delete this review?" state."""
+
+    def get(self, request, pk):
+        product, review = self.own_review(pk)
+        if review is None:
+            return render_slot(request, product)
+        return render_slot(request, product, slot="confirm_delete", own_review=review)
+
+
+class ReviewDeleteView(OwnReviewView):
+    """Delete the author's review and return their slot's new state — the
+    empty form for a buyer — with the summary out of band."""
+
+    def post(self, request, pk):
+        product, review = self.own_review(pk)
+        if review is not None:
+            review.delete()
+        return render_slot(request, product, oob_summary=True)
+
+
 class ReviewSectionView(TemplateView):
     """The whole reviews section — the single source for its content.
 
