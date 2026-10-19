@@ -1,0 +1,43 @@
+{# The review form, swapped into the author's slot. Bound forms keep what #}
+{# was typed: the comment's value and the checked star. Each star is a #}
+{# real radio input with its own label, so the rating works by keyboard. #}
+<form hx-post="{% url 'reviews:create' product.pk %}"
+      hx-target="#review-author-slot"
+      hx-swap="outerHTML"
+      class="card bg-base-100 shadow-md">
+  <div class="card-body gap-4">
+    <h3 class="card-title text-lg">Write a review</h3>
+
+    <fieldset>
+      <legend class="label mb-1">Your rating</legend>
+      <div class="rating rating-lg">
+        {% for radio in form.rating %}
+          <input type="radio"
+                 name="{{ radio.data.name }}"
+                 value="{{ radio.data.value }}"
+                 id="{{ radio.id_for_label }}"
+                 aria-label="{{ radio.choice_label }}"
+                 class="mask mask-star-2 bg-warning"
+                 required
+                 {% if radio.data.selected %}checked{% endif %} />
+        {% endfor %}
+      </div>
+      {% for error in form.rating.errors %}
+        <p class="mt-1 text-sm text-error">{{ error }}</p>
+      {% endfor %}
+    </fieldset>
+
+    <div>
+      <label class="label mb-1" for="{{ form.comment.id_for_label }}">Your comment</label>
+      {{ form.comment }}
+      <p class="mt-1 text-xs opacity-60">10 to 2,000 characters.</p>
+      {% for error in form.comment.errors %}
+        <p class="mt-1 text-sm text-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <div class="card-actions justify-end">
+      <button type="submit" class="btn btn-outline">Post review</button>
+    </div>
+  </div>
+</form>

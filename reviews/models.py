@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models import Avg, Count
 from django.utils import timezone
 
+from orders.models import Order, OrderItem
 from products.models import Product
 
 
@@ -59,6 +60,20 @@ class Review(models.Model):
     def save(self, *args, **kwargs):
         self.updated_at = self.created_at if self._state.adding else timezone.now()
         super().save(*args, **kwargs)
+
+    @classmethod
+    def can_review(cls, user, product):
+        """Whether ``user`` may write a review of ``product``: a buyer.
+
+        A buyer has an order line for the product on an order that isn't
+        cancelled — the dashboard's and coupons' meaning of a sale. Checked
+        on create only; edit and delete are gated on authorship alone.
+        """
+        return (
+            OrderItem.objects.filter(order__user=user, product=product)
+            .exclude(order__status=Order.Status.CANCELLED)
+            .exists()
+        )
 
     @property
     def is_edited(self):

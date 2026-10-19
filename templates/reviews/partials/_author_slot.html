@@ -1,0 +1,24 @@
+{# The visitor's own slot — one stable element at the top of the section. #}
+{# Every write swaps only this element (outerHTML), so nothing else moves. #}
+{# States come from views.slot_context: sign_in, note, form, card. Write #}
+{# responses pass oob_summary to refresh the summary line too. #}
+<div id="review-author-slot" class="mt-6">
+  {% if slot == "sign_in" %}
+    {# Signed-out visitors get a plain link, never an HTMX control. #}
+    <div class="flex flex-wrap items-center gap-3 rounded-box border border-base-300 p-4">
+      <p class="opacity-70">Bought this? Share what you think.</p>
+      <a href="{% url 'accounts:login' %}?next={{ product.get_absolute_url|urlencode }}"
+         class="btn btn-outline btn-sm">Sign in to review</a>
+    </div>
+  {% elif slot == "note" %}
+    <div class="alert" role="status">
+      <span>Only customers who've bought this product can review it.</span>
+    </div>
+  {% elif slot == "form" %}
+    {% include "reviews/partials/_review_form.html" %}
+  {% elif slot == "card" %}
+    <p class="mb-2 text-sm font-semibold opacity-70">Your review</p>
+    {% include "reviews/partials/_review_card.html" with review=own_review %}
+  {% endif %}
+</div>
+{% if oob_summary %}{% include "reviews/partials/_summary.html" with oob=True %}{% endif %}

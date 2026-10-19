@@ -1,4 +1,5 @@
 import ast
+import re
 from datetime import timedelta
 from http import HTTPStatus
 
@@ -11,9 +12,12 @@ from django.urls import reverse
 from django.utils import timezone
 from pytest_django.asserts import assertTemplateNotUsed, assertTemplateUsed
 
+from conftest import order_for
+from orders.models import Order
 from products.models import Product
 
 from .admin import ReviewAdmin
+from .forms import ReviewForm
 from .models import Review
 
 
@@ -122,6 +126,63 @@ def test_str(customer, product):
     )
 
 
+# --- Eligibility ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("status", "eligible"),
+    [
+        (Order.Status.PLACED, True),
+        (Order.Status.SHIPPED, True),
+        (Order.Status.DELIVERED, True),
+        (Order.Status.CANCELLED, False),
+    ],
+)
+def test_only_a_non_cancelled_order_makes_a_buyer(
+    customer, product, unavailable_product, status, eligible
+):
+    order_for(customer, product, status=status)
+    order_for(customer, unavailable_product, status=status)
+
+    assert Review.can_review(customer, product) is eligible
+    assert Review.can_review(customer, unavailable_product) is eligible
+
+
+def test_no_order_means_no_review(customer, buyer, product):
+    assert not Review.can_review(customer, product)
+
+
+# --- The form ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("comment", "message"),
+    [
+        ("", "Write a comment to go with your rating."),
+        ("   \n\t ", "Write a comment to go with your rating."),
+        ("Too short", "at least 10 characters"),
+        ("x" * 2001, "at most 2,000 characters"),
+    ],
+    ids=["blank", "whitespace", "short", "long"],
+)
+def test_form_rejects_blank_short_and_long_comments(db, comment, message):
+    form = ReviewForm(data={"rating": 4, "comment": comment})
+
+    assert not form.is_valid()
+    assert message in " ".join(form.errors["comment"])
+
+
+def test_form_trims_the_comment_before_checking_its_length(db):
+    padded = ReviewForm(data={"rating": 4, "comment": "  Ten chars.  \n"})
+    longest = ReviewForm(data={"rating": 4, "comment": f" {'x' * 2000} "})
+    short_once_trimmed = ReviewForm(data={"rating": 4, "comment": "  Nine ch  "})
+
+    assert padded.is_valid()
+    assert padded.cleaned_data["comment"] == "Ten chars."
+    assert longest.is_valid()
+    assert not short_once_trimmed.is_valid()
+
+
 # --- The reviews section ----------------------------------------------------
 
 
@@ -196,6 +257,223 @@ def test_unknown_product_pk_is_404(client, db):
     response = client.get(reverse("reviews:section", kwargs={"pk": 99999}))
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+# --- Create -----------------------------------------------------------------
+
+
+def create_url(product):
+    return reverse("reviews:create", kwargs={"pk": product.pk})
+
+
+def test_second_create_returns_the_existing_card_and_creates_nothing(
+    client, buyer, product
+):
+    """A double submit or a stale tab never errors and never doubles up."""
+    client.raise_request_exception = False  # See what the browser would see.
+    client.force_login(buyer)
+    client.post(create_url(product), {"rating": 5, "comment": "First and only."})
+
+    response = client.post(
+        create_url(product), {"rating": 1, "comment": "Second go from a stale tab."}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    content = response.content.decode()
+    assert "First and only." in content
+    assert "Second go from a stale tab." not in content
+    assert 'id="review-author-slot"' in content
+    assert Review.objects.get().rating == 5
+
+
+def test_create_returns_the_card_and_the_summary_out_of_band(
+    client, buyer, other_customer, product
+):
+    review(other_customer, product, rating=2)
+    client.force_login(buyer)
+
+    response = client.post(
+        create_url(product), {"rating": "5", "comment": "  Worth every penny.  "}
+    )
+    content = response.content.decode()
+
+    created = Review.objects.get(user=buyer)
+    assert (created.rating, created.comment) == (5, "Worth every penny.")
+    assertTemplateUsed(response, "reviews/partials/_author_slot.html")
+    assertTemplateNotUsed(response, "base.html")
+    assert "Your review" in content
+    assert "Mira K." in content
+    assert 'id="review-summary" hx-swap-oob="true"' in content
+    assert "★ 3.5 · 2 reviews" in content
+    assert "<form" not in content
+
+
+def test_invalid_create_returns_the_form_with_errors_and_what_was_typed(
+    client, buyer, product
+):
+    client.force_login(buyer)
+
+    response = client.post(create_url(product), {"rating": "3", "comment": "Meh."})
+    content = response.content.decode()
+
+    assert not Review.objects.exists()
+    assert "at least 10 characters" in content
+    assert re.search(r">\s*Meh\.</textarea>", content)
+    assert re.search(r'value="3"[^>]*checked', content)
+    assert len(re.findall(r'type="radio"[^>]*checked', content)) == 1
+    assert "No reviews yet" in content
+
+
+def test_create_without_a_rating_keeps_the_comment(client, buyer, product):
+    client.force_login(buyer)
+
+    response = client.post(create_url(product), {"comment": "Rating forgotten."})
+    content = response.content.decode()
+
+    assert not Review.objects.exists()
+    assert "Pick a rating from 1 to 5 stars." in content
+    assert re.search(r">\s*Rating forgotten\.</textarea>", content)
+
+
+def test_out_of_range_rating_is_rejected(client, buyer, product):
+    client.force_login(buyer)
+
+    response = client.post(
+        create_url(product), {"rating": "6", "comment": "Off the charts!"}
+    )
+
+    assert not Review.objects.exists()
+    assert "Pick a rating from 1 to 5 stars." in response.content.decode()
+
+
+@pytest.mark.parametrize("who", ["customer", "cancelled_buyer"])
+def test_non_buyer_create_creates_nothing_and_returns_the_note(
+    request, client, product, who
+):
+    client.force_login(request.getfixturevalue(who))
+
+    response = client.post(
+        create_url(product), {"rating": 5, "comment": "Never bought it, love it."}
+    )
+
+    assert not Review.objects.exists()
+    assert "Only customers who've bought this product" in response.content.decode()
+
+
+def test_anonymous_create_redirects_to_login_and_creates_nothing(client, product):
+    response = client.post(
+        create_url(product), {"rating": 5, "comment": "Drive-by opinion."}
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url.startswith(reverse("accounts:login"))
+    assert not Review.objects.exists()
+
+
+def test_create_for_an_unknown_product_is_404(client, customer):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", kwargs={"pk": 99999}),
+        {"rating": 5, "comment": "Nothing to review."},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_buyer_can_review_an_unavailable_product(client, buyer, unavailable_product):
+    order_for(buyer, unavailable_product)
+    client.force_login(buyer)
+
+    client.post(
+        create_url(unavailable_product), {"rating": 4, "comment": "Glad I got one."}
+    )
+
+    assert Review.objects.filter(user=buyer, product=unavailable_product).exists()
+
+
+def test_staff_buyer_can_review(client, staff_user, product):
+    order_for(staff_user, product, status=Order.Status.DELIVERED)
+    client.force_login(staff_user)
+
+    client.post(create_url(product), {"rating": 3, "comment": "Fine for the office."})
+
+    assert Review.objects.filter(user=staff_user).exists()
+
+
+# --- The author's slot ------------------------------------------------------
+
+
+def test_signed_out_visitors_get_a_plain_sign_in_link(client, product):
+    content = client.get(section_url(product)).content.decode()
+
+    login = reverse("accounts:login")
+    assert f'href="{login}?next=/products/seraphine-home-hub/"' in content
+    assert "Sign in to review" in content
+    assert "hx-post" not in content
+    assert "hx-get" not in content
+    assert "<form" not in content
+
+
+@pytest.mark.parametrize("who", ["customer", "cancelled_buyer"])
+def test_signed_in_non_buyers_get_the_only_buyers_note(request, client, product, who):
+    client.force_login(request.getfixturevalue(who))
+
+    content = client.get(section_url(product)).content.decode()
+
+    assert "Only customers who've bought this product can review it." in content
+    assert "<form" not in content
+    assert "Sign in to review" not in content
+
+
+def test_buyers_who_have_not_reviewed_get_the_form(client, buyer, product):
+    client.force_login(buyer)
+
+    content = client.get(section_url(product)).content.decode()
+
+    assert f'hx-post="{create_url(product)}"' in content
+    assert 'hx-target="#review-author-slot"' in content
+    assert 'maxlength="2000"' in content
+    assert content.count('type="radio"') == 5
+    for n, label in enumerate(["1 star", "2 stars", "3 stars", "4 stars"], 1):
+        assert f'value="{n}"' in content
+        assert f'aria-label="{label}"' in content
+    assert 'aria-label="5 stars"' in content
+    assert "<legend" in content
+
+
+def test_authors_see_their_own_card_in_the_slot_not_the_list(
+    client, buyer, other_buyer, product
+):
+    review(buyer, product, comment="Mine, pinned to the top.")
+    review(other_buyer, product, comment="Someone else's take.")
+    client.force_login(buyer)
+
+    content = client.get(section_url(product)).content.decode()
+
+    list_start = content.index("<ul")
+    assert content.count("Mine, pinned to the top.") == 1
+    assert content.index("Your review") < content.index("Mine, pinned") < list_start
+    assert content.index("Someone else&#x27;s take.") > list_start
+    assert "<form" not in content
+    assert "★ 4.0 · 2 reviews" in content
+
+
+def test_the_review_section_has_no_primary_button(
+    client, buyer, other_buyer, customer, product
+):
+    review(other_buyer, product)
+    pages = []
+    for user in [None, customer, buyer, other_buyer]:
+        client.logout()
+        if user:
+            client.force_login(user)
+        pages.append(client.get(section_url(product)).content.decode())
+
+    detail = client.get(product.get_absolute_url()).content.decode()
+
+    assert all("btn-primary" not in page for page in pages)
+    assert detail.count("btn-primary") == 1
 
 
 # --- The product detail page ------------------------------------------------

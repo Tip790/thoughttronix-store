@@ -28,6 +28,79 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 2 built with TDD: visitor states and writing a review
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 2"
+2. "approved, continue"
+3. "approved, continue"
+4. "approved, continue"
+5. "approved, continue"
+6. "approved, continue"
+7. "approved, continue"
+8. "approved, continue with the rest of the phase"
+9. "manual verification passed, continue"
+
+### Summary
+
+- **Outcome:** Phase 2 of `plans/reviews.md` is built and committed.
+  All 535 tests pass, 27 of them new since Phase 1. Ruff check and ruff
+  format are clean, and `makemigrations --check` finds nothing pending.
+  - `Review.can_review(user, product)` is the buyer check: an order line
+    for the product on an order that isn't `CANCELLED`, the same meaning
+    of "sold" as `dashboard/queries.py`. It is checked on create only.
+  - `reviews/forms.py` holds `ReviewForm`. The comment is trimmed, then
+    held to 10–2,000 characters, each failure with its own message, and
+    `maxlength` lands on the textarea. The rating is a required 1–5
+    radio choice with one message for missing or out-of-range values.
+  - `slot_context()` in `reviews/views.py` picks the visitor's state:
+    sign-in link, only-buyers note, form, or their own card. The section
+    view now leaves the visitor's own review out of the list.
+  - `ReviewCreateView` (`/reviews/<pk>/create/`, behind
+    `LoginRequiredMixin`) re-renders the slot and always sends the
+    summary out of band. An existing review comes back as its card and
+    nothing is created; a race on the unique constraint is caught inside
+    `transaction.atomic()` and shows the winning review.
+  - New partials: `_author_slot` (the stable `#review-author-slot`) and
+    `_review_form` (five labelled DaisyUI radio stars in a fieldset).
+    The sign-in link's `next` is the product's own URL, not the HTMX
+    request path. No review control uses `btn-primary`.
+  - `conftest.py` gained `order_for()` and the `buyer`, `other_buyer`
+    and `cancelled_buyer` fixtures; `customer` serves as the non-buyer.
+  - The agent proposed three TDD behaviors, and all three went through
+    an approved RED and then GREEN: eligibility by order status
+    (including unavailable products), the comment's trimming and limits,
+    and a second create returning the existing card without an error.
+  - The user ran the agent's twelve-step browser walkthrough and
+    reported that it passed.
+- **Deviations:** none. Every proposal and test was approved unchanged.
+- **Sideways:**
+  - The agent's first Create view already contained the duplicate
+    guard, which was the third TDD behavior. It cut the view back to a
+    naive create before writing that test, so the test could go RED.
+    That RED was a 500 from the unique constraint. The test sets
+    `raise_request_exception = False` so it fails on a status assertion,
+    which matches story 31's "never an error page".
+  - The approved double-create test used a comment with an apostrophe.
+    Django escapes it as `&#x27;`, so the "not shown" check could never
+    fail. The agent caught it while writing later tests and changed the
+    text. A mechanical fix.
+  - The first batch of ordinary tests had a garbled, unused `slot()`
+    helper and a convoluted checked-radio assertion. Both were replaced
+    before the first run. Two assertions then failed on markup details:
+    Django's textarea emits a newline before its value, and `urlencode`
+    leaves `/` unescaped. Both were fixed mechanically.
+  - Ruff flagged method order (DJ012): `can_review` was moved below
+    `save`. The formatter also split the Create condition awkwardly, so
+    it became a named `reviewed` variable.
+  - The full suite outgrew the two-minute foreground timeout and ran in
+    the background. `tailwind build` reported the stylesheet up to date
+    without rebuilding; `tailwind runserver` picks up the new star
+    classes.
+  - `db.sqlite3` was again left out of the commit; it was already
+    modified before the session.
+
 ## 2026-10-18 — Reviews Phase 1 built with TDD: the read-only reviews section
 
 ### Prompts

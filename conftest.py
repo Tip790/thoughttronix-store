@@ -14,8 +14,37 @@ from django.utils import timezone
 
 from accounts.models import Address
 from coupons.models import Coupon
-from orders.models import Cart, CartItem
+from orders.models import Cart, CartItem, Order, OrderItem
 from products.models import Category, Product, Tag
+
+
+def order_for(user, product, status=Order.Status.PLACED):
+    """A one-line order of ``product`` for ``user`` — enough to make a buyer."""
+    order = Order.objects.create(
+        user=user,
+        status=status,
+        total=product.price,
+        email=f"{user.username}@example.com",
+        shipping_name=user.username,
+        shipping_street="12 Cortex Lane",
+        shipping_city="Canyon",
+        shipping_state="TX",
+        shipping_zip="79015",
+        billing_name=user.username,
+        billing_street="12 Cortex Lane",
+        billing_city="Canyon",
+        billing_state="TX",
+        billing_zip="79015",
+        card_last4="4242",
+    )
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        unit_price=product.price,
+        quantity=1,
+    )
+    return order
 
 
 @pytest.fixture(autouse=True)
@@ -81,6 +110,32 @@ def unavailable_product(category):
         is_available=False,
         category=category,
     )
+
+
+@pytest.fixture
+def buyer(product):
+    """A customer with a non-cancelled (PLACED) order for ``product``."""
+    user = get_user_model().objects.create_user(
+        username="buyer", password="buyer123", first_name="Mira", last_name="Kovacs"
+    )
+    order_for(user, product)
+    return user
+
+
+@pytest.fixture
+def other_buyer(product):
+    """A second buyer of ``product``, for privacy tests."""
+    user = get_user_model().objects.create_user(username="otherbuyer", password="x")
+    order_for(user, product)
+    return user
+
+
+@pytest.fixture
+def cancelled_buyer(product):
+    """A customer whose only order for ``product`` was cancelled."""
+    user = get_user_model().objects.create_user(username="cancelled", password="x")
+    order_for(user, product, status=Order.Status.CANCELLED)
+    return user
 
 
 @pytest.fixture
