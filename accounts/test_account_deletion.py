@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -12,6 +13,7 @@ from dashboard import queries
 from orders.models import Cart, Order
 from orders.services import place_order
 from orders.test_checkout_form import VALID_DATA
+from wishlists.models import Wishlist, WishlistItem
 
 from .models import Address
 
@@ -94,6 +96,38 @@ def test_anonymize_deletes_addresses_and_cart(casey, address, cart_item):
 
     assert not Address.objects.filter(user=casey).exists()
     assert not Cart.objects.filter(user=casey).exists()
+
+
+def test_anonymize_deletes_the_wishlist_and_its_items(
+    casey, product, unavailable_product
+):
+    wishlist = Wishlist.for_user(casey)
+    wishlist.add(product)
+    wishlist.add(unavailable_product)
+    item_pks = list(wishlist.items.values_list("pk", flat=True))
+
+    casey.anonymize()
+
+    assert not Wishlist.objects.filter(user=casey).exists()
+    assert not WishlistItem.objects.filter(pk__in=item_pks).exists()
+
+
+def test_anonymize_succeeds_without_a_wishlist(casey):
+    casey.anonymize()
+
+    assert casey.is_anonymized
+    assert not Wishlist.objects.filter(user=casey).exists()
+
+
+def test_accounts_does_not_import_wishlists():
+    accounts_dir = Path(__file__).resolve().parent
+    sources = [
+        path for path in accounts_dir.rglob("*.py") if not path.name.startswith("test")
+    ]
+
+    assert sources
+    for path in sources:
+        assert "wishlists" not in path.read_text(encoding="utf-8"), path
 
 
 def test_anonymize_blanks_personal_details_on_orders(order, casey):

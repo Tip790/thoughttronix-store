@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
+from wishlists.models import WishlistItem
 
 from .models import Category, Product, Tag
 
@@ -232,6 +233,18 @@ def test_seed_builds_the_demo_world(db):
     assert statuses == set(Order.Status.values)
 
 
+def test_seed_gives_the_demo_customer_a_wishlist(db):
+    call_command("seed")
+
+    customer = get_user_model().objects.get(username="customer")
+    saved = [
+        item.product for item in WishlistItem.objects.filter(wishlist__user=customer)
+    ]
+    assert 3 <= len(saved) <= 4
+    assert any(not product.is_available for product in saved)
+    assert any(product.is_available for product in saved)
+
+
 def test_seed_is_idempotent(db):
     call_command("seed")
     first = (
@@ -240,6 +253,7 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
     )
@@ -251,6 +265,7 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
     )

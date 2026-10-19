@@ -9,7 +9,7 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            and two saved addresses
+                            a wishlist, and two saved addresses
 """
 
 import random
@@ -30,6 +30,7 @@ from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
 from products.images import normalize_image
 from products.models import Category, Product, Tag
+from wishlists.models import Wishlist
 
 TAGS = [
     "always listening",
@@ -495,6 +496,16 @@ CUSTOMER_CART = [
     ("whisper-alarm-clock", 1),
 ]
 
+# The customer demo login's wishlist, oldest save first so the page lists
+# it newest first. None are in the cart; EchoPatch is unavailable, so the
+# Unavailable badge shows straight after seeding.
+CUSTOMER_WISHLIST = [
+    "moodset",
+    "echopatch",
+    "recallpro",
+    "pulse-halo",
+]
+
 # Coupons, one in every state: (code, percent off, scope, product slugs,
 # first day, last day, active). Days are relative to today in store time,
 # so the demo never goes stale.
@@ -570,6 +581,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_wishlist()
         self._create_coupons()
         self._create_orders()
         self._create_customer_addresses()
@@ -582,8 +594,8 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Coupon.objects.count()} coupons, "
                 f"{Order.objects.count()} orders, "
-                f"and a live cart and {len(CUSTOMER_ADDRESSES)} saved addresses "
-                f"for 'customer'."
+                f"and a live cart, a {len(CUSTOMER_WISHLIST)}-product wishlist "
+                f"and {len(CUSTOMER_ADDRESSES)} saved addresses for 'customer'."
             )
         )
 
@@ -593,6 +605,7 @@ class Command(BaseCommand):
         # After the orders: Order.coupon is PROTECT.
         Coupon.objects.all().delete()
         Cart.objects.all().delete()
+        Wishlist.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
@@ -671,6 +684,17 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_wishlist(self):
+        customer = get_user_model().objects.get(username="customer")
+        wishlist = Wishlist.for_user(customer)
+        now = timezone.now()
+        # Fixed, distinct save times, so the newest-first order never ties.
+        for days_ago, slug in enumerate(reversed(CUSTOMER_WISHLIST)):
+            wishlist.items.create(
+                product=Product.objects.get(slug=slug),
+                added_at=now - timedelta(days=days_ago),
+            )
 
     def _create_coupons(self):
         today = timezone.localdate()
