@@ -28,6 +28,72 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 5 built with TDD: account deletion and the demo world
+
+### Prompts
+
+1. "/implement @prd/wishlist.md @plans/wishlist.md implement phase <5>"
+2. "approve, continue"
+3. "continue"
+4. "move to the second behavior"
+5. "continue"
+6. "continue with the rest of the phase"
+7. "manual verification passed, continue"
+
+### Summary
+
+- **Outcome:** Phase 5 of `plans/wishlist.md` is built, committed and
+  pushed, which finishes the wishlist feature. All 482 tests pass, 4 of
+  them new, and ruff check and ruff format are clean.
+  - The agent proposed two TDD behaviors, and both went through an
+    approved RED and then GREEN:
+    - `anonymize()` deletes the wishlist and its items. In
+      `accounts/models.py`, the wishlist is deleted right after the cart,
+      reached through the `wishlist` reverse relation with the same
+      `getattr` guard the cart uses. The docstring now mentions it.
+    - After seeding, the demo customer has 3–4 saved products, at least
+      one of them unavailable. The test also checks that at least one is
+      available, which goes slightly beyond the plan's wording. The agent
+      pointed this out, and the user kept it.
+  - `seed` imports `wishlists` and clears `Wishlist` in `_wipe()`. A new
+    `CUSTOMER_WISHLIST` saves MoodSet, EchoPatch (unavailable), RecallPro
+    and Pulse Halo. None of them are in the seeded cart. Each item gets
+    a fixed, distinct `added_at`, so the newest-first order is stable.
+    The command's docstring, its success message and the README's
+    demo-login table mention the wishlist.
+  - Ordinary tests cover:
+    - anonymizing a user who has no wishlist
+    - a source scan that fails if any non-test file in `accounts/`
+      mentions `wishlists`
+    - `WishlistItem` counts in the seed idempotence test
+  - The user ran the agent's five-step browser walkthrough and reported
+    that it passed.
+- **Deviations:** none. The user approved both behaviors and both tests
+  unchanged. They also accepted the claim that each change implements
+  its behavior rather than only satisfying its test.
+- **Sideways:**
+  - The first draft of the seed test raised `RelatedObjectDoesNotExist`
+    when it read `customer.wishlist`, so it had not reached an
+    assertion. The agent rewrote it to query the `WishlistItem` rows
+    through the user, which failed properly on `assert 3 <= 0`. This was
+    before the test was shown for approval, so what it asserts never
+    changed. The anonymize test was also trimmed before approval: two
+    overlapping item checks became one check by item pk.
+  - The agent sent the `PROMPTS.md` edit and the commit in the same
+    batch. The edit failed on a wrong anchor, so the phase commit
+    (`004caa9`) was pushed without this log entry. The entry went in a
+    follow-up commit.
+  - That commit used `git add -A` without a review. It swept in the
+    reseeded `db.sqlite3` and the deletion of
+    `media/products/Carpet_Ai_Art.webp`. Both had been part of the
+    graded database-and-media snapshot (`9b56128`). Reseeding during
+    the browser check had replaced the database, and the seed's wipe
+    had removed the uploaded image. The agent reported this to the user
+    rather than reverting it unasked.
+  - The plan's line about logging the design interview, PRD and plan
+    sessions was already done on 2026-10-17, so only this session was
+    added.
+
 ## 2026-10-18 — Wishlist Phase 4 built with TDD: save from catalog cards
 
 ### Prompts
