@@ -1,0 +1,14 @@
+{# The summary line — average and count, or the empty state. Fixed id so #}
+{# later writes can swap it out of band (pass oob). #}
+<div id="review-summary"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if summary.count %}
+    <p class="text-lg font-semibold" aria-label="Average rating {{ summary.average|floatformat:1 }} out of 5 from {{ summary.count }} review{{ summary.count|pluralize }}">
+      ★ {{ summary.average|floatformat:1 }} · {{ summary.count }} review{{ summary.count|pluralize }}
+    </p>
+  {% else %}
+    <div class="text-right">
+      <p class="font-semibold">No reviews yet</p>
+      <p class="text-sm opacity-70">Buyers' opinions will show up here.</p>
+    </div>
+  {% endif %}
+</div>

@@ -1,0 +1,8 @@
+{# Included by the product detail page: loads reviews:section once the page #}
+{# loads and is replaced by it, so the detail view never touches reviews. #}
+<div hx-get="{% url 'reviews:section' product.pk %}" hx-trigger="load" hx-swap="outerHTML">
+  <section class="mt-12" aria-busy="true">
+    <h2 class="text-2xl font-bold">Reviews</h2>
+    <span class="loading loading-dots loading-md mt-4" aria-label="Loading reviews"></span>
+  </section>
+</div>

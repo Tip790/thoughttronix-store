@@ -28,6 +28,207 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 1 built with TDD: the read-only reviews section
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 1"
+2. "approved, go ahead"
+3. "add an assertation if they have only a first name and then continue"
+4. "yes, move on to cycle 2"
+5. "approved, continue"
+6. "approved, continue"
+7. "approved, finish the rest of phase 1"
+8. "manual verification passed, commit phase 1"
+
+### Summary
+
+- **Outcome:** Phase 1 of `plans/reviews.md` is built and committed.
+  All 508 tests pass, 25 of them new. Ruff check and ruff format are
+  clean, and `makemigrations --check` finds nothing pending.
+  - A new `reviews` app holds `Review`: user and product FKs (both
+    `CASCADE`, both `related_name="reviews"`), a 1–5 `rating` with
+    validators plus a database `CheckConstraint`, a `comment`, and a
+    `UniqueConstraint` on (user, product). `created_at` is a default so
+    the seed can backdate. `save()` sets `updated_at` equal to
+    `created_at` on the first save and to now on every later one, so
+    `is_edited` is simply `updated_at > created_at`.
+  - The agent proposed three TDD behaviors, and all three went through
+    an approved RED and then GREEN:
+    - `display_name`: "Mira K.", falling back to the username.
+    - `ReviewQuerySet.summary()`: average and count in one query, with
+      `None`/`0` for no reviews.
+    - The section endpoint `/reviews/<pk>/`: "★ 2.8 · 11 reviews", the
+      10 newest reviews in order, and "No reviews yet" when empty.
+  - Partials: `_section` (with an empty `#review-author-slot` reserved
+    for Phase 2), `_summary` (fixed `#review-summary` id, ready for an
+    `oob` swap), `_review_card` (read-only DaisyUI stars, name,
+    "Verified purchase" badge, date, "edited" marker) and
+    `_section_placeholder`. The product detail page includes the
+    placeholder, which loads the section with `hx-trigger="load"`; the
+    product detail view is unchanged.
+  - `ReviewAdmin` lists product, user, rating and both dates, filters by
+    product and rating, and searches comments.
+  - Ordinary tests cover the constraints, the cascade, newest-first
+    ordering, the "edited" rule, the singular summary, unavailable
+    products, the 404, the placeholder for signed-in and signed-out
+    visitors, the admin, and an `ast` scan proving `products`, `orders`,
+    `coupons`, `wishlists` and `accounts` never import `reviews`.
+  - The user ran the agent's nine-step browser walkthrough and reported
+    that it passed.
+- **Deviations:** the user added one assertion to the first test: a
+  user with only a first name shows just that name ("Ada"). The agent
+  had raised the case as an open question. Everything else was approved
+  unchanged.
+- **Sideways:**
+  - The first GREEN attempt for the section test still failed: the
+    summary wrapped the ★ in its own `<span>`, so the text the test
+    looks for wasn't one run. The agent fixed the template, not the
+    test, and moved the screen-reader text to an `aria-label`.
+  - The 404 test first failed with "Database access not allowed"; it
+    needed the `db` fixture. A mechanical fix.
+  - An attempt to edit the test file with an inline `python` script
+    failed because `python` isn't on the Bash path. The agent used the
+    Edit tool instead.
+  - `db.sqlite3` was left out of the commit. It was already modified
+    before the session, and it now also holds the reviews migration and
+    the two reviews added during manual verification. The user decides
+    whether to commit it.
+
+## 2026-10-18 — Product reviews PRD broken into a five-phase plan (not yet built)
+
+### Prompts
+
+1. "/prd-to-plan @prd/reviews.md"
+2. "merge phase 3 and 4 then create plan"
+3. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that
+   went sideways."
+
+### Summary
+
+- **Outcome:** the agent read `prd/reviews.md` and looked at the
+  wishlist app, `plans/wishlist.md`, the root URLconf and `OrderItem`.
+  It then proposed six vertical slices plus the fixed decisions for the
+  plan header. The URL paths were the agent's choice, since the PRD
+  doesn't name them: every route is keyed by product pk under
+  `/reviews/<pk>/`, and Show more uses `?page=N`. The approved breakdown
+  is written to `plans/reviews.md` as five phases:
+  1. the read-only reviews section
+  2. what each visitor sees, and writing a review
+  3. editing and deleting your own review in place
+  4. Show more
+  5. account deletion, the seed and the AI-usage log
+
+  No code was written.
+- **Deviations:** the agent proposed edit and delete as separate phases,
+  to keep each one working on its own. It mentioned merging them only as
+  an option. The user merged them into one phase. The agent recommended
+  keeping visitor states and Create together in one phase, and the user
+  accepted that. The user didn't answer the question about the URL paths
+  or `?page=N`, so the plan uses the agent's proposal.
+- **Sideways:** nothing went wrong. One open item: the agent took the
+  user's silence on the URL question as approval, and nobody confirmed
+  those paths explicitly.
+
+## 2026-10-18 — Product reviews, grilled and written up as a PRD (not yet built)
+
+### Prompts
+
+1. "/grill-me add product reviews to the project, a customer can only leave
+   one review per product, each review is a rating and a written comment,
+   customers can only leave reviews for products they have purchased, can
+   edit or delete only their own reviews, and all of this should be done
+   without reloading the page or losing the customers place"
+2. "A" (Q1: "purchased" means at least one order containing the product
+   that isn't `CANCELLED`, matching the dashboard and coupons)
+3. "b" (Q2: eligibility is checked only when a review is created; a later
+   cancellation leaves the review fully editable and deletable)
+4. "a" (Q3: whole stars 1–5, a form validator plus a database
+   `CheckConstraint`, DaisyUI `rating` radios)
+5. "A" (Q4: comment required, 10–2,000 characters after trimming, with
+   `maxlength` on the textarea)
+6. "A" (Q5: reviews only on the product detail page, with a
+   "★ 4.3 · 12 reviews" summary line)
+7. "A" (Q6: all four visitor states explained: a sign-in link with
+   `?next=`, a note for non-buyers, the form for buyers, their own card
+   for authors)
+8. "A" (Q7: edit in place; the card swaps to a pre-filled form; Save and
+   Cancel; the summary updates out-of-band)
+9. "A" (Q8: delete confirmation inside the card; the empty form reappears
+   afterwards)
+10. "A" (Q9: the author's own review is pinned in a fixed `#my-review`
+    slot; everyone else's follow, newest first; an "edited" marker)
+11. "A" (Q10: 10 reviews at a time, with an HTMX "Show more reviews"
+    button)
+12. "A" (Q11: reviewers shown as "Mira K.", falling back to the username,
+    plus a "Verified purchase" badge)
+13. "A" (Q12: `User.anonymize()` deletes the customer's reviews through
+    the reverse relation, with no import)
+14. "A" (Q13: moderation is in the Django admin only, with no back-office
+    tab)
+15. "A" (Q14: `seed` builds a deliberate demo set covering every review
+    state, with one product having more than 10 reviews)
+16. "/to-prd"
+17. "Append a session log to PROMPTS.md at the repo root, under today's
+    date, newest entry at the top. Record every prompt I gave you this
+    session, in order, including any corrections. End the entry with a
+    short summary: the outcome, any places where I deviated from a
+    recommended answer or asked follow-up questions, and anything that
+    went sideways."
+
+### Summary
+
+- **Outcome:** a grilling session of 14 questions led to a new PRD,
+  `prd/reviews.md`, with 37 user stories. No code was written, and the PRD
+  is not committed yet. The agreed design:
+  - A new `reviews` app with one `Review` per (user, product). The
+    database enforces both that rule and the 1–5 rating range.
+  - Eligibility means any non-cancelled order containing the product. It
+    is checked once, when the review is created. Editing and deleting are
+    gated only on authorship.
+  - All interaction happens in place through HTMX, inside one fixed
+    author slot. That covers create, edit and cancel, the delete
+    confirmation, the stale-tab fallbacks, and a summary line updated
+    out-of-band.
+  - Other customers' reviews are listed newest first, with "Show more" in
+    steps of 10.
+  - Privacy-friendly reviewer names.
+  - Reviews deleted by `anonymize()`, product deletion cascading, and
+    moderation in the Django admin only.
+  - A seeded demo set that shows every state.
+- **Deviations:** every answer took the recommended option, and the user
+  asked no follow-up questions.
+  - Q2 recommended B, the simplest option, over the stricter A. The user
+    took B.
+- **Sideways:**
+  - No failures or wrong turns during the interview.
+  - Before asking anything, the agent settled four points from the
+    codebase rather than asking them: HTMX only, a new app, a database
+    unique constraint, and owner-scoped lookups. During the interview it
+    settled more by convention: product deletion cascades, unavailable
+    products can be reviewed, the queryset and model-method placement,
+    errors re-rendered in place, stale-tab fallbacks, and the empty
+    state.
+  - While exploring for Q12, the agent noticed two things. First, every
+    reviewer has ordered, so account deletion always goes through
+    `anonymize()`, and a `CASCADE` from user to review would never fire.
+    Second, the Q11 name rule would have shown scrubbed reviewers as
+    "deleted-user-N". Both were raised in the question rather than found
+    late.
+  - When writing the PRD, the agent made one design decision that was
+    never discussed: the reviews section loads from its own endpoint, so
+    the product detail view stays unchanged. It flagged afterwards that
+    `hx-trigger="load"` would make reviews pop in after the page appears,
+    and suggested a `reviews` template tag as the alternative. That is
+    still open. It also added several **Out of Scope** items that were
+    never discussed explicitly: helpful votes, replies and flagging,
+    sorting and filtering, notifications, dashboard analytics, and photos
+    or titles.
+
 ## 2026-10-18 — Wishlist Phase 5 built with TDD: account deletion and the demo world
 
 ### Prompts

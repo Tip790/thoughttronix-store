@@ -1,0 +1,20 @@
+{# One review — used for everyone's reviews. The stars are read-only: #}
+{# DaisyUI rating masks, the score spelled out for screen readers. #}
+<article class="card bg-base-100 shadow-md">
+  <div class="card-body gap-3">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div class="rating rating-sm" role="img" aria-label="{{ review.rating }} out of 5 stars">
+        {% for star in "12345" %}
+          <div class="mask mask-star-2 bg-warning"{% if forloop.counter == review.rating %} aria-current="true"{% endif %}></div>
+        {% endfor %}
+      </div>
+      <span class="font-semibold">{{ review.display_name }}</span>
+      <span class="badge badge-success badge-outline badge-sm">Verified purchase</span>
+    </div>
+    <p class="whitespace-pre-line">{{ review.comment }}</p>
+    <p class="text-sm opacity-70">
+      <time datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"F j, Y" }}</time>
+      {% if review.is_edited %}· edited{% endif %}
+    </p>
+  </div>
+</article>

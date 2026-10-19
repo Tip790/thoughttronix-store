@@ -1,0 +1,19 @@
+{# The whole reviews section, loaded into the product detail page by #}
+{# reviews:section. The author's slot is reserved at the top and never #}
+{# moves; other customers' reviews follow, newest first. #}
+<section id="reviews" class="mt-12" aria-labelledby="reviews-heading">
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h2 id="reviews-heading" class="text-2xl font-bold">Reviews</h2>
+    {% include "reviews/partials/_summary.html" %}
+  </div>
+
+  <div id="review-author-slot" class="mt-6"></div>
+
+  {% if reviews %}
+    <ul class="mt-6 space-y-4">
+      {% for review in reviews %}
+        <li>{% include "reviews/partials/_review_card.html" %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
