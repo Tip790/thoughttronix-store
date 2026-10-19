@@ -28,6 +28,55 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 4 built with TDD: save from catalog cards
+
+### Prompts
+
+1. "/implement @prd/wishlist.md @plans/wishlist.md implement phase <4>"
+2. "continue"
+3. "continue"
+4. "continue"
+5. "continue with the rest of the phase"
+
+### Summary
+
+- **Outcome:** Phase 4 of `plans/wishlist.md` is built and committed.
+  All 478 tests pass, 5 of them new in `wishlists/tests.py`, and ruff
+  check and ruff format are clean.
+  - The agent proposed one TDD behavior rather than three, because the
+    button, its endpoints, the out-of-band badge and the sign-in link
+    were already settled and tested in Phases 1–3. The behavior was that
+    each catalog card renders its own product's starting state. It went
+    through an approved RED and then GREEN.
+  - The only production change is in `templates/products/catalog.html`.
+    Each card's actions now include `_wishlist_button.html` beside the
+    add-to-cart partial, in a flex group so the price stays on the left.
+    No Python changed.
+  - Ordinary tests cover:
+    - card buttons swapping only themselves (`outerHTML`, never the
+      wishlist page's target or flag)
+    - saving from a card returning the Saved button and one out-of-band
+      badge
+    - the signed-out sign-in link's `next` keeping the search and tag
+      parameters
+    - add-to-cart staying the card's only `btn-primary`
+  - The agent gave a nine-step browser walkthrough. The user replied
+    "continue with the rest of the phase" without stating whether it
+    passed, and the agent took that as approval.
+- **Deviations:** none. The user approved the single proposed behavior
+  and its test unchanged, and accepted the claim that the change
+  implements the behavior rather than only satisfying the test.
+- **Sideways:**
+  - The signed-out `next` test was wrong twice before it passed. First,
+    its `tag=bestseller` filter matched no products, so the page rendered
+    the empty state with no cards. Tagging the product fixed it. Second,
+    it looked for the text "♡ Save", but the heart sits in its own
+    `aria-hidden` span. Matching the real markup fixed that. Neither
+    repair changed what the test asserts.
+  - The first full-suite run went over the 2-minute foreground timeout
+    and moved to the background. The agent waited for it to finish
+    before reporting GREEN.
+
 ## 2026-10-18 — Wishlist Phase 3 built with TDD: the navbar link with a live count
 
 ### Prompts

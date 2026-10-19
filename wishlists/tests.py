@@ -1,5 +1,6 @@
 from decimal import Decimal
 from http import HTTPStatus
+from urllib.parse import quote
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -258,6 +259,79 @@ def test_detail_page_of_an_unavailable_product_offers_save(
     response = client.get(unavailable_product.get_absolute_url())
 
     assert add_url(unavailable_product) in response.content.decode()
+
+
+# --- Catalog cards -------------------------------------------------------------
+
+
+def test_catalog_cards_show_each_products_starting_state(
+    client, customer, product, unavailable_product
+):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    response = client.get(reverse("products:catalog"))
+
+    page = response.content.decode()
+    assert remove_url(product) in page
+    assert add_url(product) not in page
+    assert add_url(unavailable_product) in page
+    assert remove_url(unavailable_product) not in page
+    assert page.count('aria-pressed="true"') == 1
+    assert page.count('aria-pressed="false"') == 1
+
+
+def test_catalog_card_buttons_swap_only_themselves(client, customer, product):
+    client.force_login(customer)
+
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    assert 'hx-swap="outerHTML"' in page
+    assert "#wishlist-contents" not in page
+    assert '"from": "wishlist"' not in page
+
+
+def test_saving_from_a_card_returns_the_saved_button_and_badge(
+    client, customer, product
+):
+    client.force_login(customer)
+    client.get(reverse("products:catalog"))
+
+    response = client.post(add_url(product))
+
+    page = response.content.decode()
+    assert 'aria-pressed="true"' in page
+    assert remove_url(product) in page
+    assert page.count('id="wishlist-badge"') == 1
+    assert 'hx-swap-oob="true"' in page
+
+
+def test_catalog_prompts_anonymous_visitors_back_to_the_same_page(client, product, tag):
+    product.tags.add(tag)
+    catalog = f"{reverse('products:catalog')}?q=Seraphine&tag=bestseller"
+
+    page = client.get(catalog).content.decode()
+
+    next_url = quote(catalog, safe="/")
+    assert f"{reverse('accounts:login')}?next={next_url}" in page
+    assert '<span aria-hidden="true">♡</span> Save' in page
+    assert add_url(product) not in page
+    assert "aria-pressed" not in page
+
+
+def test_add_to_cart_stays_the_cards_only_primary_button(
+    client, customer, product, unavailable_product
+):
+    Wishlist.for_user(customer).add(product)
+    client.force_login(customer)
+
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    # One available product: one add-to-cart button, and the Save / Saved
+    # buttons on both cards stay ghost or outline.
+    assert page.count("btn btn-primary btn-sm") == 1
+    assert 'class="btn btn-outline btn-sm">' in page
+    assert 'class="btn btn-ghost btn-sm">' in page
 
 
 # --- The wishlist page -------------------------------------------------------
