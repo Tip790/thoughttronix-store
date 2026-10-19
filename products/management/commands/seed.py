@@ -9,7 +9,8 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            a wishlist, and two saved addresses
+                            a wishlist, two saved addresses, and one review
+                            (Veil, which every seeded account reviews)
 """
 
 import random
@@ -30,6 +31,7 @@ from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
 from products.images import normalize_image
 from products.models import Category, Product, Tag
+from reviews.models import Review
 from wishlists.models import Wishlist
 
 TAGS = [
@@ -541,13 +543,54 @@ CUSTOMER_ORDERS = [
     (2, Order.Status.PLACED, [("veil", 1)], None),
 ]
 
+# The customer demo login's one review: (product slug, days ago, rating,
+# comment). Veil came in the 2-day-old order above, not yet shipped; the
+# other bought products are left unreviewed, so the form shows on them.
+CUSTOMER_REVIEW = (
+    "veil",
+    1,
+    4,
+    "Ninety seconds is generous. I was out in forty, still holding my "
+    "toothbrush. Woke up rested and on the bathroom floor. Four stars.",
+)
+
+# Veil is the busy product: every other seeded account reviews it, so the
+# list runs past ten and "Show more" appears even for the demo customer.
+# (rating, comment) pairs, dealt out to reviewers by the seeded RNG.
+REVIEWED_PRODUCT = "veil"
+REVIEWS = [
+    (
+        5,
+        "Best sleep of my life. I don't remember putting it on, which I'm "
+        "told is the point.",
+    ),
+    (
+        5,
+        "Ninety seconds on the dot. I've started timing it. My partner has "
+        "started timing me.",
+    ),
+    (5, "I fell asleep in a meeting wearing it. My manager bought the team a set."),
+    (4, "Works exactly as advertised. Do take the warning about standing seriously."),
+    (4, "Deep, dreamless, total. Slightly worried by how little I miss my dreams."),
+    (4, "Great on flights. The flight attendants were less enthusiastic about it."),
+    (3, "It works, but the cap is warm and the twenty-minute cycle is not negotiable."),
+    (3, "Sleep is excellent. Waking up is the part they still seem to be working on."),
+    (2, "It puts me to sleep fine. It also puts me to sleep when I am not wearing it."),
+    (
+        1,
+        "Ordered it as a gift. The gift has been asleep since Thursday. Please advise.",
+    ),
+    (5, "Ninety seconds, as promised. I haven't had an opinion about bedtime since."),
+]
+
 # Every Nth background order placed during SUMMER26's run used it (once
 # per customer) — picked by position, so no extra RNG draws shift the
 # rest of the demo world.
 SUMMER_COUPON_EVERY = 3
 
 # Background orders spread across the trailing six months so the Phase 7
-# dashboard has a real time axis. 48 here + 4 above = 52 total.
+# dashboard has a real time axis. 48 here + 4 above = 52, plus the few
+# that back the seeded reviews (see _create_reviews).
 BACKGROUND_ORDER_COUNT = 48
 
 # Shipping addresses for the background orders. US-only, like checkout.
@@ -583,8 +626,13 @@ class Command(BaseCommand):
         self._create_customer_cart()
         self._create_customer_wishlist()
         self._create_coupons()
-        self._create_orders()
+        # One seeded RNG for the whole demo world keeps every run identical
+        # (the idempotence contract). Reviews draw after orders, so they
+        # never shift the order history.
+        rng = random.Random(2026)
+        self._create_orders(rng)
         self._create_customer_addresses()
+        self._create_reviews(rng)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -594,6 +642,7 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Coupon.objects.count()} coupons, "
                 f"{Order.objects.count()} orders, "
+                f"{Review.objects.count()} reviews, "
                 f"and a live cart, a {len(CUSTOMER_WISHLIST)}-product wishlist "
                 f"and {len(CUSTOMER_ADDRESSES)} saved addresses for 'customer'."
             )
@@ -601,6 +650,7 @@ class Command(BaseCommand):
 
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
+        Review.objects.all().delete()
         Order.objects.all().delete()
         # After the orders: Order.coupon is PROTECT.
         Coupon.objects.all().delete()
@@ -726,15 +776,12 @@ class Command(BaseCommand):
             for role in defaults:
                 address.make_default(role)
 
-    def _create_orders(self):
+    def _create_orders(self, rng):
         """Order history: 4 visible orders for 'customer', 48 background.
 
-        A seeded RNG keeps every run identical (the idempotence
-        contract). Statuses follow age — old orders are delivered,
-        recent ones are still moving, and about one in ten was
-        cancelled along the way.
+        Statuses follow age — old orders are delivered, recent ones are
+        still moving, and about one in ten was cancelled along the way.
         """
-        rng = random.Random(2026)
         now = timezone.now()
         User = get_user_model()
 
@@ -800,6 +847,60 @@ class Command(BaseCommand):
                 coupon=coupon,
             )
 
+    def _create_reviews(self, rng):
+        """The demo customer's one review, then a busy list on Veil.
+
+        Every review is backed by a non-cancelled order, placed before
+        the review was written. A reviewer who hasn't bought Veil gets a
+        delivered order for it first, so the eligibility rule holds.
+        """
+        now = timezone.now()
+        User = get_user_model()
+        customer = User.objects.get(username="customer")
+        slug, days_ago, rating, comment = CUSTOMER_REVIEW
+        Review.objects.create(
+            user=customer,
+            product=Product.objects.get(slug=slug),
+            rating=rating,
+            comment=comment,
+            created_at=now - timedelta(days=days_ago),
+        )
+
+        product = Product.objects.get(slug=REVIEWED_PRODUCT)
+        reviewers = list(
+            User.objects.filter(
+                username__in=[username for username, *_ in DEMO_USERS]
+                + [username for username, *_ in BACKGROUND_CUSTOMERS]
+            )
+            .exclude(pk=customer.pk)
+            .order_by("username")
+        )
+        reviews = rng.sample(REVIEWS, len(reviewers))
+        for user, (rating, comment) in zip(reviewers, reviews, strict=True):
+            order = (
+                user.orders.filter(items__product=product)
+                .exclude(status=Order.Status.CANCELLED)
+                .order_by("created_at")
+                .first()
+            )
+            if order is None:
+                order = self._build_order(
+                    user=user,
+                    created_at=now - timedelta(days=rng.randint(20, 150)),
+                    status=Order.Status.DELIVERED,
+                    lines=[(product, 1)],
+                    rng=rng,
+                )
+            # Somewhere between the purchase and now.
+            Review.objects.create(
+                user=user,
+                product=product,
+                rating=rating,
+                comment=comment,
+                created_at=order.created_at
+                + (now - order.created_at) * rng.uniform(0.2, 0.9),
+            )
+
     def _build_order(self, *, user, created_at, status, lines, rng, coupon=None):
         """One order with denormalized addresses and purchase-time prices.
 
@@ -847,3 +948,4 @@ class Command(BaseCommand):
                 quantity=quantity,
                 discount=line_discount,
             )
+        return order

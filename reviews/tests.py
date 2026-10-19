@@ -7,6 +7,7 @@ import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import IntegrityError
 from django.urls import reverse
 from django.utils import timezone
@@ -885,6 +886,92 @@ def test_admin_lists_filters_and_searches_reviews(admin_client, customer, produc
     assert searched.context["cl"].result_count == 1
     assert missed.context["cl"].result_count == 0
     assert ReviewAdmin.list_filter == ("product", "rating")
+
+
+# --- Account deletion -------------------------------------------------------
+
+
+def test_anonymize_deletes_the_users_reviews_and_no_one_elses(
+    buyer, other_buyer, product, unavailable_product
+):
+    order_for(buyer, unavailable_product)
+    Review.objects.create(user=buyer, product=product, rating=5, comment="Love her.")
+    Review.objects.create(
+        user=buyer, product=unavailable_product, rating=2, comment="Too chatty."
+    )
+    theirs = Review.objects.create(
+        user=other_buyer, product=product, rating=4, comment="Mostly lovely."
+    )
+
+    buyer.anonymize()
+
+    assert not Review.objects.filter(user=buyer).exists()
+    assert list(Review.objects.all()) == [theirs]
+
+
+def test_anonymize_succeeds_without_reviews(buyer):
+    buyer.anonymize()
+
+    assert buyer.is_anonymized
+    assert not Review.objects.filter(user=buyer).exists()
+
+
+# --- The seed command -------------------------------------------------------
+
+
+def test_seed_gives_the_demo_customer_every_review_state(db):
+    call_command("seed")
+
+    customer = get_user_model().objects.get(username="customer")
+    reviewed = set(Product.objects.filter(reviews__user=customer))
+    bought = {
+        product
+        for product in Product.objects.all()
+        if Review.can_review(customer, product)
+    }
+
+    assert len(reviewed) == 1
+    assert reviewed <= bought
+    assert bought - reviewed  # bought but not reviewed: the form shows
+    assert Product.objects.count() - len(bought) >= 10  # never bought: the note
+
+
+def test_seed_gives_one_product_a_busy_order_backed_review_list(db):
+    call_command("seed")
+
+    busiest = max(Product.objects.all(), key=lambda product: product.reviews.count())
+    ratings = list(busiest.reviews.values_list("rating", flat=True))
+    assert len(ratings) > 10
+    assert len(set(ratings)) >= 3  # mixed, so the average is realistic
+
+    for seeded in Review.objects.select_related("user", "product"):
+        assert Review.can_review(seeded.user, seeded.product), seeded
+        # Bought before it was reviewed, on an order that wasn't cancelled.
+        assert (
+            Order.objects.filter(
+                user=seeded.user,
+                items__product=seeded.product,
+                created_at__lt=seeded.created_at,
+            )
+            .exclude(status=Order.Status.CANCELLED)
+            .exists()
+        ), seeded
+
+
+def test_seeding_twice_gives_the_same_reviews(db):
+    def seeded_reviews():
+        return sorted(
+            Review.objects.values_list(
+                "user__username", "product__slug", "rating", "comment"
+            )
+        )
+
+    call_command("seed")
+    first = seeded_reviews()
+    call_command("seed")
+
+    assert first
+    assert seeded_reviews() == first
 
 
 # --- Boundaries -------------------------------------------------------------

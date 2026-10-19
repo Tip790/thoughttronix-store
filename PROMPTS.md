@@ -28,6 +28,85 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 5 built with TDD: account deletion and the demo world
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 5"
+2. "apprvoed!"
+3. "approve, continue"
+4. "approved,continue"
+5. "continue!"
+6. "approve, continue"
+7. "continue!"
+8. "approve, continue"
+9. "add an additional requirement: Staff can edit or delete any review."
+   — answered three follow-up questions: a back-office Reviews tab, as a
+   new Phase 6, with staff able to edit rating and comment and delete.
+10. "manual verification passed, continue"
+
+### Summary
+
+- **Outcome:** Phase 5 of `plans/reviews.md` is built and committed.
+  All 575 tests pass, 5 of them new since Phase 4. Ruff check and ruff
+  format are clean.
+  - `User.anonymize()` now deletes the user's reviews through the
+    `reviews` reverse relation, so `accounts` still imports nothing from
+    `reviews`. The docstring now says reviews go with the account.
+  - `seed` imports `reviews` (the one allowed exception). It clears
+    reviews first in the wipe and builds them last with the same seeded
+    RNG, passed from `handle()` into `_create_orders` and
+    `_create_reviews`. Reviews draw only after every order draw, so the
+    existing order history doesn't shift.
+  - The demo customer reviews Veil (4 stars, from their PLACED order).
+    DreamWeaver, MindSync and the rest of their purchases stay
+    unreviewed, and 28 products are never bought.
+  - Veil is the busy product: all 12 seeded accounts review it with
+    mixed ratings (5, 4, 3, 2 and 1, about 3.8 on average). Seven
+    reviewers without a Veil order get a delivered one first, so seeding
+    makes 59 orders, inside the core PRD's 40–60. Every review is dated
+    between its order and now. `_build_order` now returns the order.
+  - Three TDD behaviors went RED then GREEN: anonymizing deletes the
+    user's reviews and no one else's; the demo customer has the
+    reviewed, bought-not-reviewed and never-bought states; and one
+    product has more than 10 mixed reviews, each backed by a
+    non-cancelled order placed before it. Regular tests cover
+    anonymizing with no reviews and seeding twice giving the same
+    reviews.
+  - The seed's success message counts reviews. The seed docstring and
+    the README's `customer` row mention the review.
+  - The user ran the agent's browser walkthrough and reported that it
+    passed.
+- **Deviations:**
+  - The agent first proposed dedicated reviewer accounts with their own
+    orders. Analysis of the seeded data showed no product had more than
+    5 buyers, and the extra accounts would have pushed orders past the
+    core PRD's cap of 60. The agent switched to Veil, the existing
+    accounts and 7 extra orders, and moved the customer's review from
+    DreamWeaver to Veil. `products/tests.py` now pins 59 orders, not 52.
+  - Cycle 3's test also checks that each backing order was placed
+    before its review, beyond the plan's wording. The agent offered to
+    drop that check and the user kept it.
+  - Before committing, the user added a new requirement: staff can edit
+    or delete any review. The agent noted it contradicts story 28 and
+    the PRD's out-of-scope list and asked three questions. The answers:
+    a back-office Reviews tab, as a new Phase 6 after this commit, with
+    staff able to edit the rating and comment and to delete. This
+    overrides the recommended delete-only option. Nothing for it is
+    built in this phase.
+- **Sideways:**
+  - Cycle 1's test first went in `accounts/test_account_deletion.py`
+    and broke Phase 1's guard, which scans every `.py` file in
+    `accounts`, tests included, for `reviews` imports. The test moved
+    unchanged to `reviews/tests.py`, and the seed tests went there too
+    for the same reason.
+  - To check buyer counts without touching the committed database, the
+    agent seeded a scratch SQLite file from a script in its scratchpad.
+  - Ruff format reflowed three long review comments in `seed.py`, and
+    two were split by hand to match the catalog copy.
+  - `db.sqlite3` and `REFLECTION.MD` were left out of the commit. Both
+    were changed outside this session.
+
 ## 2026-10-18 — Reviews Phase 4 built with TDD: show more reviews
 
 ### Prompts

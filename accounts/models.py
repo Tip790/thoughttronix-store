@@ -125,7 +125,7 @@ class User(AbstractUser):
         """Delete the person, keep the business record.
 
         The account is scrubbed and switched off for good, and the saved
-        addresses, cart and wishlist go with it. Past orders stay for the store's
+        addresses, cart, wishlist and product reviews go with it. Past orders stay for the store's
         books — totals, items, statuses, coupons, dates and card last four
         untouched — but the email, names and addresses on them are
         blanked. ``Order.user`` is ``PROTECT``, so this is the only way to
@@ -148,6 +148,7 @@ class User(AbstractUser):
         wishlist = getattr(self, "wishlist", None)
         if wishlist is not None:
             wishlist.delete()
+        self.reviews.all().delete()
         # Orders name their address columns ``shipping_<field>`` and
         # ``billing_<field>``, after ``Address.FIELDS``.
         self.orders.update(
