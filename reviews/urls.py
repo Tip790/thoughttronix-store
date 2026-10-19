@@ -17,4 +17,20 @@ urlpatterns = [
     ),
     path("reviews/<int:pk>/delete/", views.ReviewDeleteView.as_view(), name="delete"),
     path("reviews/<int:pk>/more/", views.ReviewMoreView.as_view(), name="more"),
+    # Back office — staff-only, pk URLs per the URL conventions.
+    path(
+        "backoffice/reviews/",
+        views.ManageReviewListView.as_view(),
+        name="manage_reviews",
+    ),
+    path(
+        "backoffice/reviews/<int:pk>/edit/",
+        views.ManageReviewUpdateView.as_view(),
+        name="manage_review_update",
+    ),
+    path(
+        "backoffice/reviews/<int:pk>/delete/",
+        views.ManageReviewDeleteView.as_view(),
+        name="manage_review_delete",
+    ),
 ]

@@ -10,7 +10,7 @@ A ThoughtTronix shopper deciding whether to buy a product has only the store's o
 
 Customers who have bought something also have nowhere to say what they thought of it. They can't warn other shoppers about a disappointment or recommend something they love.
 
-When reviews do exist, shoppers need to trust them. A review from someone who never bought the product, or one customer posting many reviews of the same product, would make every rating meaningless. Customers also expect to stay in control of what they've written: they want to fix a typo, change their mind about a rating, or take a review down, and nobody else should be able to change their words.
+When reviews do exist, shoppers need to trust them. A review from someone who never bought the product, or one customer posting many reviews of the same product, would make every rating meaningless. Customers also expect to stay in control of what they've written: they want to fix a typo, change their mind about a rating, or take a review down, and no other customer should be able to change their words. The store's staff, meanwhile, need a way to correct or remove a problem review without the Django admin.
 
 Finally, reading and writing reviews must not interrupt shopping. Writing, editing or deleting a review shouldn't reload the page, jump the customer back to the top, or lose their place in the list.
 
@@ -36,7 +36,7 @@ Every product's detail page gains a **Reviews** section.
 - **Reviews show who wrote them, privately.** Each review shows the reviewer as first name and last initial (for example "Mira K."), or their username if they haven't set a name. It also shows a "Verified purchase" badge, the date, and an "edited" marker if the review was changed after posting.
 - **Long lists load in steps.** The first 10 of other customers' reviews show up front, and a "Show more reviews" button appends the next 10 below without moving anything above it.
 - **Deleting an account deletes the customer's reviews**, along with the rest of their personal data.
-- **The superuser can remove abusive reviews** in the Django admin. Customers can only ever edit or delete their own.
+- **Staff can edit or delete any review** from a Reviews tab in the back office, filtered by product and rating. The superuser can also remove reviews in the Django admin. Customers can only ever edit or delete their own.
 - **The demo world shows every state.** After seeding:
   - The demo customer has one product they've reviewed, one they've bought but not reviewed, and plenty they've never bought.
   - One product has more than 10 reviews with mixed ratings, so "Show more" appears.
@@ -70,7 +70,7 @@ Every product's detail page gains a **Reviews** section.
 25. As a customer, I want to be asked to confirm before my review is deleted, so that one misclick doesn't destroy it.
 26. As a customer, I want the review form to reappear after I delete my review, so that I can write a new one if I change my mind.
 27. As a customer, I want the average rating and count to update the moment I add, edit or delete a review, so that the summary is always accurate.
-28. As a customer, I want only myself able to edit or delete my reviews, so that nobody can change my words.
+28. As a customer, I want only myself and the store's staff able to edit or delete my reviews, so that no other customer can change my words.
 29. As a customer whose order was later cancelled, I want to keep control of the review I already wrote, so that I can still edit or delete it.
 30. As a customer, I want to review products that are currently unavailable if I bought them, so that my opinion still counts.
 31. As a customer, I want a double-click or a stale browser tab never to create a second review or show an error page, so that the section always shows my real state.
@@ -80,6 +80,9 @@ Every product's detail page gains a **Reviews** section.
 35. As a screen-reader or keyboard user, I want the star rating to be a set of labelled radio buttons, so that I can choose a rating without a mouse.
 36. As a developer or grader, I want the seeded demo world to show every review state, so that the whole feature is visible straight after seeding.
 37. As a developer, I want deleting a product to delete its reviews, so that reviews never point at products that no longer exist.
+38. As a staff member, I want to find any review in the back office, filtered by product and rating, so that I can deal with problem reviews without the Django admin.
+39. As a staff member, I want to edit any review's rating and comment, so that I can correct or redact it.
+40. As a staff member, I want to delete any review after confirming, so that I can remove abusive content.
 
 ## Implementation Decisions
 
@@ -116,7 +119,7 @@ Every product's detail page gains a **Reviews** section.
 
 **Endpoints.**
 - Every endpoint is a class-based view. Every mutation, and every view that returns a form or the author's own card, sits behind `LoginRequiredMixin`.
-- Every lookup of the author's review goes through the requesting user. No view fetches a review by bare id, so customers can never reach each other's reviews.
+- Every lookup of the author's review goes through the requesting user. No customer-facing view fetches a review by bare id, so customers can never reach each other's reviews. Only the staff-only back-office views (see **Back-office Reviews tab**) look reviews up by pk.
 - Products are looked up by pk, as the wishlist endpoints do, across the whole catalog. An unknown pk returns 404.
 - **Reviews section** (GET, keyed by product): renders the whole section, meaning the summary, the visitor's own slot in whichever of the four states applies, and the first page of other customers' reviews. It's the single source for the section's content, used both for the initial page render and after changes.
 - **Create** (POST, keyed by product): runs the eligibility check and validates the form. On success, it returns the author's card plus an out-of-band summary update. On invalid input, it returns the form with errors and the submitted values. If the user isn't eligible, it returns the "only buyers" note. If a review already exists (a double submit or a stale tab), it creates nothing and returns the existing card.
@@ -149,7 +152,14 @@ Every product's detail page gains a **Reviews** section.
 
 **Admin.**
 - `Review` is registered in the Django admin, with a list showing product, reviewer, rating and dates, filters by product and rating, and search over the comment.
-- This is the only moderation tool. There's no back-office tab.
+
+**Back-office Reviews tab.**
+- A Reviews tab joins the back office beside Products, Orders and Coupons. Every view uses `StaffRequiredMixin`, and URLs use pks under `backoffice/reviews/`, per the URL conventions.
+- **List:** every review, newest first, showing product, reviewer, rating, a short comment excerpt and dates, filtered by product and rating, paginated like the other tabs.
+- **Edit:** staff can change the rating and comment through the same model form, so the same validation applies. The review stays its author's: the reviewer and product never change.
+- **Delete:** a confirmation page, then the review is removed.
+- A staff edit sets `updated_at` like any edit, so the review shows the ordinary "edited" marker. Nothing marks it as a staff edit.
+- Staff moderating doesn't change their own review slot on product pages: there they remain an ordinary customer.
 
 **Seed.**
 - The demo customer gets one product they've ordered and reviewed, at least one product they've ordered but not reviewed, and many products they've never ordered.
@@ -167,13 +177,13 @@ Every product's detail page gains a **Reviews** section.
   - **Form:** the comment's trimming, both length limits, and the rating's range.
   - **Views:** each endpoint's partial and out-of-band summary. The four visitor states render correctly. Invalid input keeps the submitted values. Double create returns the existing card and creates nothing. The stale delete and edit fallbacks work. Unknown pks return 404. Pagination returns 10 at a time, drops the button on the last page, and excludes the viewer's own review.
   - **Access control:** anonymous mutations redirect and create nothing. A non-buyer's create creates nothing. One customer can never edit or delete another's review. An author whose order was cancelled after reviewing can still edit and delete.
+  - **Back office:** staff can list, filter, edit and delete any review; edits are validated by the review form. Customers and anonymous visitors are refused every back-office review view.
   - **Integration:** anonymization deletes the user's reviews. Seeding produces the agreed demo states and keeps every review backed by a qualifying order.
 
 ## Out of Scope
 
 - **Star ratings on catalog cards** or anywhere outside the product detail page. The aggregate is built so this can follow later.
 - **A "My reviews" page** on the customer's account.
-- **A back-office Reviews tab** or moderation by ordinary staff. Moderation is the superuser in the Django admin only.
 - **Review titles, photos, pros and cons lists**, or any field beyond the rating and comment.
 - **Half stars** or any rating scale other than whole stars from 1 to 5.
 - **Re-checking eligibility after creation:** hiding or locking reviews when an order is later cancelled.

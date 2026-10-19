@@ -1,0 +1,111 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Reviews — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h2 class="text-xl font-semibold">
+      {{ page_obj.paginator.count }} review{{ page_obj.paginator.count|pluralize }}
+    </h2>
+    <form method="get" class="flex flex-wrap items-center gap-2 text-sm">
+      {% if active_rating %}<input type="hidden" name="rating" value="{{ active_rating }}">{% endif %}
+      <label class="opacity-60" for="review-product-filter">Product:</label>
+      <select id="review-product-filter" name="product" class="select select-sm w-56">
+        <option value="">All products</option>
+        {% for product in products %}
+          <option value="{{ product.pk }}" {% if product.pk|stringformat:"d" == active_product %}selected{% endif %}>{{ product.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline btn-sm">Filter</button>
+    </form>
+  </div>
+  <div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+    <span class="opacity-60">Rating:</span>
+    <a href="{% querystring rating=None page=None %}"
+       class="badge {% if not active_rating %}badge-primary{% else %}badge-ghost{% endif %}">
+      all
+    </a>
+    {% for value in ratings %}
+      <a href="{% querystring rating=value page=None %}"
+         class="badge {% if active_rating == value %}badge-primary{% else %}badge-ghost{% endif %}">
+        {{ value }}★
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if reviews %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Reviewer</th>
+            <th>Rating</th>
+            <th>Comment</th>
+            <th>Posted</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for review in reviews %}
+            <tr>
+              <td>
+                <a href="{{ review.product.get_absolute_url }}" class="link-hover font-semibold">{{ review.product.name }}</a>
+              </td>
+              <td>{{ review.display_name }}</td>
+              <td class="whitespace-nowrap" aria-label="{{ review.rating }} out of 5 stars">{{ review.rating }}★</td>
+              <td class="max-w-xs text-sm">{{ review.comment|truncatechars:80 }}</td>
+              <td class="whitespace-nowrap text-sm">
+                {{ review.created_at|date:"M j, Y" }}
+                {% if review.is_edited %}
+                  <p class="text-xs opacity-60">edited {{ review.updated_at|date:"M j, Y" }}</p>
+                {% endif %}
+              </td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'reviews:manage_review_update' review.pk %}"
+                   class="btn btn-ghost btn-xs">Edit</a>
+                <a href="{% url 'reviews:manage_review_delete' review.pk %}"
+                   class="btn btn-ghost btn-xs text-error">Delete</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+      <div class="mt-8 flex justify-center">
+        <div class="join">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}" class="btn join-item">«</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">«</button>
+          {% endif %}
+          <button class="btn join-item pointer-events-none">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </button>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}" class="btn join-item">»</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">»</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="py-16 text-center">
+      {% if active_product or active_rating %}
+        <p class="text-5xl">🔍</p>
+        <p class="mt-4 text-xl font-semibold">No reviews match those filters</p>
+        <p class="mt-2 opacity-70">The customers had other thoughts.</p>
+        <a href="{% querystring product=None rating=None page=None %}" class="btn btn-primary btn-sm mt-6">
+          Show all reviews
+        </a>
+      {% else %}
+        <p class="text-5xl">💬</p>
+        <p class="mt-4 text-xl font-semibold">No reviews yet</p>
+        <p class="mt-2 opacity-70">The customers are keeping their thoughts to themselves. For now.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

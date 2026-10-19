@@ -1,0 +1,49 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Edit review — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-2xl bg-base-100 shadow-md">
+    <div class="card-body">
+      <h2 class="card-title">Edit review by {{ review.display_name }}</h2>
+      <p class="text-sm opacity-70">
+        On <a href="{{ review.product.get_absolute_url }}" class="link">{{ review.product.name }}</a>,
+        posted {{ review.created_at|date:"F j, Y" }}. The reviewer and product stay as they are;
+        a saved change shows the ordinary "edited" marker.
+      </p>
+      <form method="post" class="mt-2 space-y-4">
+        {% csrf_token %}
+        <fieldset>
+          <legend class="label mb-1">Rating</legend>
+          <div class="rating rating-lg">
+            {% for radio in form.rating %}
+              <input type="radio"
+                     name="{{ radio.data.name }}"
+                     value="{{ radio.data.value }}"
+                     id="{{ radio.id_for_label }}"
+                     aria-label="{{ radio.choice_label }}"
+                     class="mask mask-star-2 bg-warning"
+                     required
+                     {% if radio.data.selected %}checked{% endif %} />
+            {% endfor %}
+          </div>
+          {% for error in form.rating.errors %}
+            <p class="mt-1 text-sm text-error">{{ error }}</p>
+          {% endfor %}
+        </fieldset>
+        <div>
+          <label class="label mb-1" for="{{ form.comment.id_for_label }}">Comment</label>
+          {{ form.comment }}
+          <p class="mt-1 text-xs opacity-60">10 to 2,000 characters.</p>
+          {% for error in form.comment.errors %}
+            <p class="mt-1 text-sm text-error">{{ error }}</p>
+          {% endfor %}
+        </div>
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <a href="{% url 'reviews:manage_reviews' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save review</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

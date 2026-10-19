@@ -28,6 +28,65 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Reviews Phase 6 built with TDD: staff moderation in the back office
+
+### Prompts
+
+1. "/implement @prd/reviews.md @plans/reviews.md implement phase 6"
+2. "approved, go ahead"
+3. "approved, go ahead"
+4. "approved, go ahead"
+5. "approved, go ahead"
+6. "manual verification passed, go ahead"
+
+### Summary
+
+- **Outcome:** Phase 6 of `plans/reviews.md` is built and committed.
+  All 590 tests pass, 15 of them new in `reviews/test_backoffice.py`.
+  Ruff check and ruff format are clean.
+  - A Reviews tab joins the back-office rail between Coupons and
+    Dashboard. Three staff-only views in `reviews/views.py`, all behind
+    `StaffRequiredMixin` and copying the Coupons tab:
+    `ManageReviewListView`, `ManageReviewUpdateView` and
+    `ManageReviewDeleteView`, at `backoffice/reviews/`,
+    `backoffice/reviews/<pk>/edit/` and `backoffice/reviews/<pk>/delete/`.
+  - The list is newest first, 20 per page like Orders. It has a product
+    dropdown (only products with reviews) and rating badges that combine
+    through `{% querystring %}`. Junk filter values are ignored. There
+    are two designed empty states: no reviews yet, and no matches.
+  - Edit is an `UpdateView` on the customers' own `ReviewForm`, so the
+    same trimming, length and rating rules apply. Only the rating and
+    comment can change. `Review.save` stamps `updated_at`, so the
+    ordinary "edited" marker shows. Delete has a confirmation page with a
+    `btn-error` button. Success messages name the reviewer by display name.
+  - Two TDD behaviors went RED then GREEN: the list filters by product
+    and rating, newest first; and a staff edit changes only the rating
+    and comment, rejecting bad input and ignoring posted `user` and
+    `product` fields. Regular tests cover:
+    - anonymous visitors redirected and customers (even the author) given
+      403 on GET and POST, with nothing changed
+    - unknown pks returning 404 and the tab link
+    - the excerpt, pagination, junk filters and both empty states
+    - the pre-filled edit form, the "edited" marker on the product page,
+      and confirm-then-delete
+  - The user ran the agent's browser walkthrough and reported that it
+    passed.
+- **Deviations:** none. Every stop was approved as proposed.
+- **Sideways:**
+  - Cycle 2's first scaffold would have passed straight away, because a
+    real `UpdateView` on `ReviewForm` already ignores extra fields. To get
+    a true RED, the agent scaffolded a GET page with a POST stub that only
+    redirected, then replaced it with the `UpdateView`.
+  - A first draft of the pre-filled test matched the template's exact
+    whitespace. It was rewritten to check the form's values before it ran.
+  - `tailwind build` said the stylesheet was up to date after the new
+    templates were added. It needed `--force` to compile `select-sm` and
+    `w-56`, as in an earlier session.
+  - The Phase 6 edits to `prd/reviews.md` and `plans/reviews.md` from the
+    previous session were committed with this phase. `db.sqlite3`,
+    `REFLECTION.MD` and the deleted `media/products/Carpet_Ai_Art.webp`
+    were left out because they were changed outside this session.
+
 ## 2026-10-18 — Reviews Phase 5 built with TDD: account deletion and the demo world
 
 ### Prompts

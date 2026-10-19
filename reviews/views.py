@@ -6,13 +6,17 @@ The author's own review is always reached through ``request.user`` —
 never fetched by id — so no customer can touch another's review.
 """
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import ListView, TemplateView
+from django.views.generic import DeleteView, ListView, TemplateView, UpdateView
 
+from accounts.mixins import StaffRequiredMixin
 from products.models import Product
 
 from .forms import ReviewForm
@@ -20,6 +24,7 @@ from .models import Review
 
 REVIEWS_PER_PAGE = 10
 SLOT_TEMPLATE = "reviews/partials/_author_slot.html"
+RATINGS = ["1", "2", "3", "4", "5"]
 
 
 def other_reviews(user, product):
@@ -217,3 +222,72 @@ class ReviewCreateView(LoginRequiredMixin, View):
                 **slot_context(request.user, product, form),
             },
         )
+
+
+# --- The back office --------------------------------------------------------
+#
+# Staff moderation: any review, looked up by pk — the only views that do.
+# Every view gates on StaffRequiredMixin. The ``section`` context entry
+# drives the active tab in the staff shell.
+
+
+class ManageReviewListView(StaffRequiredMixin, ListView):
+    """Every review, newest first, filterable via ``?product=`` and ``?rating=``."""
+
+    template_name = "reviews/manage_reviews.html"
+    context_object_name = "reviews"
+    paginate_by = 20
+    extra_context = {"section": "reviews"}
+
+    def get_queryset(self):
+        reviews = Review.objects.select_related("user", "product")
+        product = self.request.GET.get("product", "")
+        if product.isdigit():
+            reviews = reviews.filter(product_id=product)
+        rating = self.request.GET.get("rating", "")
+        if rating in RATINGS:
+            reviews = reviews.filter(rating=rating)
+        return reviews
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            products=Product.objects.filter(reviews__isnull=False).distinct(),
+            ratings=RATINGS,
+            active_product=self.request.GET.get("product", ""),
+            active_rating=self.request.GET.get("rating", ""),
+        )
+        return context
+
+
+class ManageReviewUpdateView(StaffRequiredMixin, SuccessMessageMixin, UpdateView):
+    """Correct or redact any review's rating and comment.
+
+    The customers' own ``ReviewForm`` validates it, and only its two fields
+    are editable: the review stays its author's, on its product. Saving
+    stamps ``updated_at``, so the ordinary "edited" marker shows.
+    """
+
+    model = Review
+    form_class = ReviewForm
+    context_object_name = "review"
+    template_name = "reviews/manage_review_form.html"
+    success_url = reverse_lazy("reviews:manage_reviews")
+    extra_context = {"section": "reviews"}
+
+    def get_success_message(self, cleaned_data):
+        return f"Review by {self.object.display_name} saved."
+
+
+class ManageReviewDeleteView(StaffRequiredMixin, DeleteView):
+    """Remove any review, after a confirmation page."""
+
+    model = Review
+    context_object_name = "review"
+    template_name = "reviews/manage_review_confirm_delete.html"
+    success_url = reverse_lazy("reviews:manage_reviews")
+    extra_context = {"section": "reviews"}
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Review by {self.object.display_name} deleted.")
+        return super().form_valid(form)

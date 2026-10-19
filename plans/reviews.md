@@ -29,9 +29,9 @@ Durable decisions that apply across all phases:
   - `/reviews/<pk>/more/?page=N` is the next batch of other customers' reviews (`GET`, public), using Django's paginator, 10 per page.
 - **Authorization**:
   - Every mutation, and every view that returns a form or the author's own card, uses `LoginRequiredMixin`. Anonymous requests are redirected and create nothing.
-  - Every lookup of the author's review goes through `request.user`. No view fetches a review by bare id.
+  - Every lookup of the author's review goes through `request.user`. No customer-facing view fetches a review by bare id. Only the staff-only back-office views (Phase 6) look reviews up by pk.
   - Stale states (the review no longer exists, or already exists on create) return the user's current state for their slot, never an error.
-  - Staff and the superuser review like any customer. Moderation is the superuser in the Django admin only.
+  - Staff and the superuser review like any customer on product pages. Moderation is the back-office Reviews tab (staff, Phase 6) and the Django admin (superuser).
 - **Page integration**: the product detail page includes a placeholder that loads `/reviews/<pk>/` once the page loads. That endpoint is the single source for the section's content.
 - **HTMX**:
   - The author's slot is one stable element with a fixed id at the top of the section. Every write, edit, cancel, delete and confirm swaps only that element.
@@ -40,7 +40,11 @@ Durable decisions that apply across all phases:
   - Signed-out visitors are never given an HTMX control. They get a plain sign-in link with `next` pointing back to the product page.
   - The detail page's only `btn-primary` stays add-to-cart. Review controls use ghost or outline styles, and destructive confirmation uses semantic error styling.
   - Templates follow `docs/TEMPLATES.md`.
-- **Admin**: `Review` is registered with a list showing product, reviewer, rating and dates, filters by product and rating, and search over the comment. There's no back-office tab.
+- **Admin**: `Review` is registered with a list showing product, reviewer, rating and dates, filters by product and rating, and search over the comment.
+- **Back office** (Phase 6): a Reviews tab in the `reviews` namespace, every view behind `StaffRequiredMixin`, pk URLs, following the Coupons tab's pattern.
+  - `/backoffice/reviews/` is the list (`GET`), filtered by product and rating, paginated.
+  - `/backoffice/reviews/<pk>/edit/` is the edit form (`GET`, `POST`).
+  - `/backoffice/reviews/<pk>/delete/` is the delete confirmation and delete (`GET`, `POST`).
 
 ---
 
@@ -191,3 +195,31 @@ This phase adds the "more reviews" endpoint and its batch partial. When other cu
 - [ ] Running `seed` twice gives the same result.
 - [ ] Every review state is visible right after seeding.
 - [ ] `PROMPTS.md` has new entries appended, and no earlier entries are changed.
+
+---
+
+## Phase 6: Staff moderation in the back office
+
+**User stories**: 28, 38, 39, 40
+
+### What to build
+
+This phase adds a Reviews tab to the back office, beside Products, Orders and Coupons, following the Coupons tab's pattern: full-page class-based views, `StaffRequiredMixin` on every view, pk URLs and `manage_*` names and templates.
+
+- **List:** every review, newest first, showing product, reviewer display name, rating, a comment excerpt and dates. It filters by product and rating and paginates like the other tabs. Each row links to Edit and Delete.
+- **Edit:** a pre-filled page using the existing review model form, so the same trimming, length and rating rules apply. Staff can change the rating and comment. The reviewer and product never change. Saving sets `updated_at`, so the ordinary "edited" marker shows. Nothing marks it as a staff edit.
+- **Delete:** a confirmation page with semantic error styling on the destructive button, then the review is removed.
+- The tab is reached from the back-office navigation. Success messages follow the other tabs.
+
+Nothing changes on the customer-facing product page. Staff still have their own ordinary review slot there.
+
+### Acceptance criteria
+
+- [ ] The Reviews tab appears in the back-office navigation for staff.
+- [ ] The list shows every review newest first, and filters by product and by rating.
+- [ ] Staff can edit any review's rating and comment. Invalid input re-renders the form with errors and the typed values. The reviewer and product don't change.
+- [ ] A staff-edited review shows the "edited" marker on the product page.
+- [ ] Staff can delete any review after a confirmation page.
+- [ ] Customers are refused, and anonymous visitors are redirected to login, on every back-office review view, and nothing changes.
+- [ ] An unknown review pk returns 404.
+- [ ] The customer-facing review endpoints are unchanged: one customer still can't reach another's review.
